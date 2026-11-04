@@ -347,6 +347,13 @@ export default function PpiRoadshow27Page() {
       setLogoutPesan("");
       setUser(null);
       setQrVerified(false);
+
+      if (withReview) {
+        alert("Terima kasih! Penilaian & ulasan Anda berhasil disimpan.");
+        window.location.href = "/#penilaian-preview";
+      } else {
+        window.location.href = "/login";
+      }
     } finally {
       setLogoutBusy(false);
     }

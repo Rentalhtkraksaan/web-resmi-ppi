@@ -14,7 +14,7 @@ import {
   verifyPassword,
   verifySignedCaptcha,
 } from "@/lib/security";
-import { firebasePush, UMUM_RTDB_URL } from "@/lib/firebase";
+import { firebasePush, ROADSHOW_RTDB_URL, UMUM_RTDB_URL } from "@/lib/firebase";
 
 export async function GET(req: NextRequest) {
   // Fast path: Endpoint to obtain cryptographically signed Captcha for client form
@@ -476,12 +476,15 @@ export async function POST(req: NextRequest) {
             data: { assignedSchoolId: null },
           })
           .catch(() => {});
+      }
 
-        const rating = Number(body.rating);
-        const pesan = sanitizeString(String(body.pesan || "")).slice(0, 50);
+      // Save review on logout for any authenticated user (Super Admin, Admin, or User)
+      if (!body.skipReview) {
+        const rating = Number(body.rating) || 5;
+        const rawPesan = sanitizeString(String(body.pesan || "")).slice(0, 50);
+        const pesan = rawPesan || (rating >= 4 ? "Pelayanan sangat baik dan lancar" : "Evaluasi kegiatan roadshow");
 
-        // Save review only if panitia chose to write one (not mandatory after 5s countdown)
-        if (pesan && pesan.length >= 2 && !isNaN(rating) && rating >= 1 && rating <= 5) {
+        if (rating >= 1 && rating <= 5) {
           const createdReview = await prisma.review.create({
             data: {
               nama: session.fullName,
@@ -492,16 +495,25 @@ export async function POST(req: NextRequest) {
               source: "LOGOUT_ROADSHOW",
               isVisible: true,
             },
+          }).catch((err) => {
+            console.warn("Prisma review create non-fatal warning:", err);
+            return null;
           });
 
-          await firebasePush(UMUM_RTDB_URL, "penilaian", {
-            nama: createdReview.nama,
-            rating: createdReview.rating,
-            pesan: createdReview.pesan,
+          const rtdbPayload = {
+            nama: session.fullName,
+            rating: Math.min(5, Math.max(1, Math.round(rating))),
+            pesan,
             kategori: "ppi",
-            angkatan: createdReview.angkatan,
+            angkatan: session.angkatan !== "-" ? session.angkatan : "Panitia",
             waktu: new Date().toLocaleString("id-ID"),
-          });
+            createdAt: new Date().toISOString(),
+          };
+
+          await Promise.allSettled([
+            firebasePush(ROADSHOW_RTDB_URL, "penilaian", rtdbPayload),
+            firebasePush(UMUM_RTDB_URL, "penilaian", rtdbPayload),
+          ]);
         }
       }
 

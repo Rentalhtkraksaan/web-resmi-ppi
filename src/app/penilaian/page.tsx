@@ -57,8 +57,8 @@ export default function FormPenilaianPage() {
 
       setSubmitted(true);
       setTimeout(() => {
-        router.push("/#penilaian-preview");
-      }, 1500);
+        window.location.href = "/#penilaian-preview";
+      }, 1200);
     } catch {
       alert("Terjadi kesalahan jaringan.");
       setSubmitting(false);

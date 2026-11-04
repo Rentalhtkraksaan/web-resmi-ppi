@@ -9,7 +9,7 @@ import {
   RolePermissions,
   sanitizeString,
 } from "@/lib/security";
-import { firebasePush, UMUM_RTDB_URL } from "@/lib/firebase";
+import { firebaseGet, firebasePush, ROADSHOW_RTDB_URL, UMUM_RTDB_URL } from "@/lib/firebase";
 
 // Helper: Safely delete physical file from /uploads/ directory (BUG-HUNTER-05)
 async function deleteUploadedFile(fileUrl?: string | null) {
@@ -92,10 +92,40 @@ export async function GET() {
     }),
   ]);
 
+  // Sync with persistent Cloud RTDB to ensure reviews are never lost across Vercel Lambda container recycles
+  let mergedReviews = [...reviews];
+  try {
+    const rtdbData = await firebaseGet<Record<string, any>>(ROADSHOW_RTDB_URL, "penilaian");
+    if (rtdbData && typeof rtdbData === "object") {
+      const existingSigs = new Set(mergedReviews.map((r) => `${r.nama.trim().toLowerCase()}_${r.pesan.trim().toLowerCase()}`));
+      for (const [key, val] of Object.entries(rtdbData)) {
+        if (val && typeof val === "object" && val.nama && val.pesan) {
+          const sig = `${String(val.nama).trim().toLowerCase()}_${String(val.pesan).trim().toLowerCase()}`;
+          if (!existingSigs.has(sig)) {
+            existingSigs.add(sig);
+            mergedReviews.unshift({
+              id: `rtdb_${key}`,
+              nama: String(val.nama),
+              kategori: val.kategori === "ppi" ? "ppi" : "umum",
+              angkatan: String(val.angkatan || "-"),
+              rating: Number(val.rating) || 5,
+              pesan: String(val.pesan),
+              source: "LANDING",
+              isVisible: true,
+              createdAt: val.createdAt ? new Date(val.createdAt) : new Date(),
+            } as any);
+          }
+        }
+      }
+    }
+  } catch {
+    // non-fatal fallback
+  }
+
   return NextResponse.json({
     config,
     items,
-    reviews,
+    reviews: mergedReviews,
   });
 }
 
@@ -142,16 +172,35 @@ export async function POST(req: NextRequest) {
         source: body.source === "LOGOUT_ROADSHOW" ? "LOGOUT_ROADSHOW" : "LANDING",
         isVisible: true,
       },
+    }).catch((err) => {
+      console.warn("Prisma review create fallback to RTDB:", err);
+      return {
+        id: `rev_${Date.now()}`,
+        nama,
+        kategori,
+        angkatan: kategori === "ppi" ? angkatan : "-",
+        rating,
+        pesan,
+        source: "LANDING",
+        isVisible: true,
+        createdAt: new Date(),
+      };
     });
 
-    await firebasePush(UMUM_RTDB_URL, "penilaian", {
+    const rtdbPayload = {
       nama: created.nama,
       rating: created.rating,
       pesan: created.pesan,
       kategori: created.kategori,
       angkatan: created.angkatan,
       waktu: new Date().toLocaleString("id-ID"),
-    });
+      createdAt: new Date().toISOString(),
+    };
+
+    await Promise.allSettled([
+      firebasePush(ROADSHOW_RTDB_URL, "penilaian", rtdbPayload),
+      firebasePush(UMUM_RTDB_URL, "penilaian", rtdbPayload),
+    ]);
 
     return NextResponse.json({ success: true, review: created });
   }

@@ -88,6 +88,14 @@
     "system": {
       ".read": true,
       ".write": true
+    },
+    "penilaian": {
+      ".read": true,
+      ".write": true
+    },
+    "reviews": {
+      ".read": true,
+      ".write": true
     }
   }
 }

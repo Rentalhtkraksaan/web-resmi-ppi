@@ -832,7 +832,7 @@ export default function LandingPage() {
           </div>
 
           {/* Summary Penilaian & Tombol Beri Penilaian */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-5">
+          <div id="penilaian-preview" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-5">
             <div className="flex items-center gap-4 text-left">
               <div className="text-3xl sm:text-4xl font-extrabold text-white">{avgRating}</div>
               <div>
