@@ -196,7 +196,10 @@ export default function PaskibrakaAuthSplit({
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({
+        error: `Server mengalami kendala (Status: ${res.status}). Silakan coba sesaat lagi.`,
+      }));
+
       if (!res.ok) {
         setLoginError(data.error || "Gagal login. Periksa username dan password.");
         refreshCaptcha();
