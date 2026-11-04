@@ -103,8 +103,8 @@ export default function DashboardPage() {
   const [qrModalSchool, setQrModalSchool] = useState<any | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
-  // Live Visitor Count
-  const [visitorCount, setVisitorCount] = useState<number>(1540);
+  // Live Visitor Count (base: 2410)
+  const [visitorCount, setVisitorCount] = useState<number>(2410);
 
   // Search Filter for Users
   const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -185,15 +185,25 @@ export default function DashboardPage() {
         }
       }
 
-      // Sync Visitor Count from Firebase RTDB (fallback: 1540)
+      // Sync Visitor Count (base: 2410)
       try {
-        const vRes = await fetch(
-          "https://cwu-gen-2-default-rtdb.firebaseio.com/system/visitorCount.json",
-          { cache: "no-store" }
-        );
-        if (vRes.ok) {
+        const vRes = await fetch("/api/visitors", { cache: "no-store" }).catch(() => null);
+        if (vRes && vRes.ok) {
           const vData = await vRes.json();
-          if (typeof vData === "number" && vData > 0) setVisitorCount(vData);
+          if (typeof vData.count === "number" && vData.count >= 2410) {
+            setVisitorCount(vData.count);
+          }
+        } else {
+          const rtdbRes = await fetch(
+            "https://cwu-gen-2-default-rtdb.firebaseio.com/system/visitorCount.json",
+            { cache: "no-store" }
+          );
+          if (rtdbRes.ok) {
+            const rtdbData = await rtdbRes.json();
+            if (typeof rtdbData === "number" && rtdbData >= 2410) {
+              setVisitorCount(rtdbData);
+            }
+          }
         }
       } catch {
         // fallback ok

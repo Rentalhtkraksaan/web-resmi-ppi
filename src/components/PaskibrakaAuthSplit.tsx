@@ -181,6 +181,7 @@ export default function PaskibrakaAuthSplit({
       return;
     }
 
+    let loginSucceeded = false;
     setLoginBusy(true);
     try {
       const res = await fetch("/api/auth", {
@@ -206,17 +207,26 @@ export default function PaskibrakaAuthSplit({
         return;
       }
 
+      loginSucceeded = true;
+    } catch (err: any) {
+      console.error("Login fetch error:", err);
+      setLoginError(
+        err?.message && err.message.length < 100
+          ? err.message
+          : "Terjadi gangguan jaringan. Silakan refresh halaman dan coba kembali."
+      );
+      refreshCaptcha();
+      return;
+    } finally {
+      setLoginBusy(false);
+    }
+
+    if (loginSucceeded) {
       if (onSuccess) {
         onSuccess();
       } else {
-        router.push(redirectUrl);
-        router.refresh();
+        window.location.href = redirectUrl;
       }
-    } catch {
-      setLoginError("Terjadi gangguan jaringan. Silakan coba kembali.");
-      refreshCaptcha();
-    } finally {
-      setLoginBusy(false);
     }
   };
 

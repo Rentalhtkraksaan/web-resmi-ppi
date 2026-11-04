@@ -80,6 +80,15 @@
           ".validate": "!newData.exists() || (newData.isString() && newData.val() === auth.uid)"
         }
       }
+    },
+    "visitor_stats": {
+      ".read": true,
+      ".write": true
+    },
+    "system": {
+      ".read": true,
+      ".write": true
     }
   }
 }
+

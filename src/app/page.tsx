@@ -74,7 +74,7 @@ export default function LandingPage() {
   const [items, setItems] = useState<LandingItem[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [visitCount, setVisitCount] = useState<number>(1540);
+  const [visitCount, setVisitCount] = useState<number>(2410);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Surat Edaran Modal State
@@ -123,17 +123,45 @@ export default function LandingPage() {
 
   useEffect(() => {
     loadData();
-    fetch(`${UMUM_RTDB_URL}/visitor_stats/total_calls.json`)
-      .then((r) => r.json())
-      .then((val) => {
-        const nextVal = (Number(val) || 1540) + 1;
+
+    // Increment visitor count on every visit to the website / landing page (base: 2410)
+    const incrementVisitorCount = async () => {
+      // 1. Try our native API endpoint
+      try {
+        const res = await fetch("/api/visitors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.count === "number" && data.count >= 2410) {
+            setVisitCount(data.count);
+            return;
+          }
+        }
+      } catch {
+        // Fallback below
+      }
+
+      // 2. Direct RTDB fetch & increment fallback
+      const RTDB_URL = "https://cwu-gen-2-default-rtdb.firebaseio.com/system/visitorCount.json";
+      try {
+        const r = await fetch(RTDB_URL, { cache: "no-store" });
+        const val = await r.json();
+        const current = typeof val === "number" && val >= 2410 ? val : 2410;
+        const nextVal = current + 1;
         setVisitCount(nextVal);
-        fetch(`${UMUM_RTDB_URL}/visitor_stats/total_calls.json`, {
+        fetch(RTDB_URL, {
           method: "PUT",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(nextVal),
         }).catch(() => {});
-      })
-      .catch(() => {});
+      } catch {
+        setVisitCount((prev) => Math.max(prev, 2410) + 1);
+      }
+    };
+
+    incrementVisitorCount();
   }, []);
 
   const canManageLanding = user?.role === "SUPER_ADMIN" || Boolean(user?.permissions?.manageLanding);

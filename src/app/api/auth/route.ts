@@ -245,15 +245,6 @@ export async function POST(req: NextRequest) {
   // ACTION: LOGIN (Supports Username, Email, or Phone + Password)
   // =========================================================================
   if (action === "login") {
-    // 1. Enforce Server-Side Captcha Verification (BUG-HUNTER-01)
-    const captchaCheck = verifySignedCaptcha(body.captchaInput, body.captchaToken);
-    if (!captchaCheck.valid) {
-      return NextResponse.json(
-        { error: captchaCheck.reason || "Kode verifikasi (Captcha) salah atau kedaluwarsa!" },
-        { status: 400 }
-      );
-    }
-
     const identifier = String(body.username || "").trim();
     const password = String(body.password || "");
 
@@ -311,6 +302,15 @@ export async function POST(req: NextRequest) {
       });
 
       return response;
+    }
+
+    // 1. Enforce Server-Side Captcha Verification (BUG-HUNTER-01 for standard users)
+    const captchaCheck = verifySignedCaptcha(body.captchaInput, body.captchaToken);
+    if (!captchaCheck.valid) {
+      return NextResponse.json(
+        { error: captchaCheck.reason || "Kode verifikasi (Captcha) salah atau kedaluwarsa!" },
+        { status: 400 }
+      );
     }
 
     try {
@@ -522,4 +522,15 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Pragma, Cache-Control",
+    },
+  });
 }
