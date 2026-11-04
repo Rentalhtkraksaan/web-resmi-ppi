@@ -93,6 +93,14 @@
       ".read": true,
       ".write": true
     },
+    "penilaian_vote": {
+      ".read": true,
+      ".write": true
+    },
+    "pendaftaran": {
+      ".read": true,
+      ".write": true
+    },
     "reviews": {
       ".read": true,
       ".write": true
