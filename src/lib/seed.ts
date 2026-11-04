@@ -49,6 +49,20 @@ export async function ensureSeeded() {
             }),
           },
           {
+            username: "aditya",
+            passwordHash: hashPassword("AdityaSuper27!"),
+            fullName: "Aditya (Super Admin Utama)",
+            angkatan: "2023",
+            role: "SUPER_ADMIN",
+            permissions: JSON.stringify({
+              manageLanding: true,
+              manageMerchandise: true,
+              manageReviews: true,
+              manageRoadshow: true,
+              manageVoting: true,
+            }),
+          },
+          {
             username: "admin_roadshow",
             passwordHash: hashPassword("RoadshowPPI27!"),
             fullName: "Admin Koordinator Roadshow",
