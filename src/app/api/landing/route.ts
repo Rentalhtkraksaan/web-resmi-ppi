@@ -9,7 +9,7 @@ import {
   RolePermissions,
   sanitizeString,
 } from "@/lib/security";
-import { firebaseGet, firebasePush, ROADSHOW_RTDB_URL, UMUM_RTDB_URL } from "@/lib/firebase";
+import { firebaseGet, firebasePush, firebasePut, ROADSHOW_RTDB_URL, UMUM_RTDB_URL } from "@/lib/firebase";
 
 // Helper: Safely delete physical file from /uploads/ directory (BUG-HUNTER-05)
 async function deleteUploadedFile(fileUrl?: string | null) {
@@ -95,25 +95,41 @@ export async function GET() {
   // Sync with persistent Cloud RTDB to ensure reviews are never lost across Vercel Lambda container recycles
   let mergedReviews = [...reviews];
   try {
-    const rtdbData = await firebaseGet<Record<string, any>>(ROADSHOW_RTDB_URL, "penilaian");
-    if (rtdbData && typeof rtdbData === "object") {
-      const existingSigs = new Set(mergedReviews.map((r) => `${r.nama.trim().toLowerCase()}_${r.pesan.trim().toLowerCase()}`));
-      for (const [key, val] of Object.entries(rtdbData)) {
-        if (val && typeof val === "object" && val.nama && val.pesan) {
-          const sig = `${String(val.nama).trim().toLowerCase()}_${String(val.pesan).trim().toLowerCase()}`;
+    const [roadshowData, umumData] = await Promise.all([
+      firebaseGet<Record<string, any>>(ROADSHOW_RTDB_URL, "penilaian"),
+      firebaseGet<Record<string, any>>(UMUM_RTDB_URL, "penilaian"),
+    ]);
+
+    const combinedRtdb = { ...(roadshowData || {}), ...(umumData || {}) };
+
+    if (Object.keys(combinedRtdb).length > 0) {
+      const existingSigs = new Set(
+        mergedReviews.map((r) => `${r.nama.trim().toLowerCase()}_${r.pesan.trim().toLowerCase()}`)
+      );
+
+      for (const [key, val] of Object.entries(combinedRtdb)) {
+        if (val && typeof val === "object" && (val as any).nama && (val as any).pesan) {
+          const v = val as any;
+          const sig = `${String(v.nama).trim().toLowerCase()}_${String(v.pesan).trim().toLowerCase()}`;
+
           if (!existingSigs.has(sig)) {
             existingSigs.add(sig);
             mergedReviews.unshift({
               id: `rtdb_${key}`,
-              nama: String(val.nama),
-              kategori: val.kategori === "ppi" ? "ppi" : "umum",
-              angkatan: String(val.angkatan || "-"),
-              rating: Number(val.rating) || 5,
-              pesan: String(val.pesan),
+              nama: String(v.nama),
+              kategori: v.kategori === "ppi" ? "ppi" : "umum",
+              angkatan: String(v.angkatan || "-"),
+              rating: Number(v.rating) || 5,
+              pesan: String(v.pesan),
               source: "LANDING",
               isVisible: true,
-              createdAt: val.createdAt ? new Date(val.createdAt) : new Date(),
+              createdAt: v.createdAt ? new Date(v.createdAt) : new Date(),
             } as any);
+          }
+
+          // Mirror to paskab-c3eb4 if it was missing there
+          if (!umumData || !umumData[key]) {
+            firebasePut(UMUM_RTDB_URL, `penilaian/${key}`, v).catch(() => {});
           }
         }
       }
