@@ -1,0 +1,85 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['fullName', 'phoneWhatsApp', 'email']) && !newData.hasChild('password')",
+        "fullName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+        },
+        "phoneWhatsApp": {
+          ".validate": "newData.isString() && newData.val().matches(/^(08|628|\\+628)[0-9]{8,12}$/)"
+        },
+        "email": {
+          ".validate": "newData.isString() && auth.token.email === newData.val()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "!newData.exists() || newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "products": {
+      ".read": true,
+      ".write": "auth != null",
+      "$productId": {
+        ".validate": "newData.hasChildren(['title', 'imageUrl', 'createdAt'])",
+        "title": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 150"
+        },
+        "imageUrl": {
+          ".validate": "newData.isString() && newData.val().beginsWith('https://res.cloudinary.com/')"
+        },
+        "price": {
+          ".validate": "!newData.exists() || newData.isNumber()"
+        },
+        "description": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1500)"
+        },
+        "category": {
+          ".validate": "!newData.exists() || newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "authorUid": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val() === auth.uid)"
+        }
+      }
+    },
+    "activities": {
+      ".read": true,
+      ".write": "auth != null",
+      "$activityId": {
+        ".validate": "newData.hasChildren(['title', 'imageUrl', 'createdAt'])",
+        "title": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+        },
+        "imageUrl": {
+          ".validate": "newData.isString() && newData.val().beginsWith('https://res.cloudinary.com/')"
+        },
+        "description": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 3000)"
+        },
+        "date": {
+          ".validate": "!newData.exists() || newData.isString()"
+        },
+        "location": {
+          ".validate": "!newData.exists() || newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "authorUid": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val() === auth.uid)"
+        }
+      }
+    }
+  }
+}
