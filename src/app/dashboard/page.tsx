@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
   // Live Visitor Count (base: 2410)
-  const [visitorCount, setVisitorCount] = useState<number>(2410);
+  const [visitorCount, setVisitorCount] = useState<number>(0);
 
   // Search Filter for Users
   const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -190,7 +190,7 @@ export default function DashboardPage() {
         const vRes = await fetch("/api/visitors", { cache: "no-store" }).catch(() => null);
         if (vRes && vRes.ok) {
           const vData = await vRes.json();
-          if (typeof vData.count === "number" && vData.count >= 2410) {
+          if (typeof vData.count === "number" && vData.count >= 0) {
             setVisitorCount(vData.count);
           }
         } else {
@@ -200,7 +200,7 @@ export default function DashboardPage() {
           );
           if (rtdbRes.ok) {
             const rtdbData = await rtdbRes.json();
-            if (typeof rtdbData === "number" && rtdbData >= 2410) {
+            if (typeof rtdbData === "number" && rtdbData >= 0) {
               setVisitorCount(rtdbData);
             }
           }
