@@ -74,7 +74,7 @@ export default function LandingPage() {
   const [items, setItems] = useState<LandingItem[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [visitCount, setVisitCount] = useState<number>(2410);
+  const [visitCount, setVisitCount] = useState<number>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Surat Edaran Modal State
