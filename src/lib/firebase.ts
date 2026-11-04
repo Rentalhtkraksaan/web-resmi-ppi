@@ -19,6 +19,7 @@ export const UMUM_FIREBASE_CONFIG = {
   storageBucket: "paskab-c3eb4.firebasestorage.app",
   messagingSenderId: "630872087747",
   appId: "1:630872087747:web:dbe8eee722f2d0f6759676",
+  measurementId: "G-SM5LN74FK4",
 };
 
 /**
