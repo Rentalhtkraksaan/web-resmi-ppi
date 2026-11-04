@@ -134,7 +134,7 @@ export default function LandingPage() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (typeof data.count === "number" && data.count >= 2410) {
+          if (typeof data.count === "number" && data.count >= 0) {
             setVisitCount(data.count);
             return;
           }
@@ -148,7 +148,7 @@ export default function LandingPage() {
       try {
         const r = await fetch(RTDB_URL, { cache: "no-store" });
         const val = await r.json();
-        const current = typeof val === "number" && val >= 2410 ? val : 2410;
+        const current = typeof val === "number" && val >= 0 ? val : 0;
         const nextVal = current + 1;
         setVisitCount(nextVal);
         fetch(RTDB_URL, {
@@ -157,7 +157,7 @@ export default function LandingPage() {
           body: JSON.stringify(nextVal),
         }).catch(() => {});
       } catch {
-        setVisitCount((prev) => Math.max(prev, 2410) + 1);
+        setVisitCount((prev) => Math.max(prev, 0) + 1);
       }
     };
 
