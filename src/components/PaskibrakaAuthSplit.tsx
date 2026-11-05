@@ -671,24 +671,17 @@ export default function PaskibrakaAuthSplit({
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <Link
                     href="/"
-                    className="w-full py-2.5 px-3 sm:px-4 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm text-center transition flex items-center justify-center gap-1.5"
+                    className="w-full py-2.5 px-3 sm:px-4 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm text-center transition flex items-center justify-center"
                   >
-                    <span>← Kembali</span>
+                    <span>Kembali</span>
                   </Link>
 
                   <button
                     type="submit"
                     disabled={loginBusy}
-                    className="w-full py-2.5 px-3 sm:px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/30 active:scale-95 disabled:bg-slate-400"
+                    className="w-full py-2.5 px-3 sm:px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center shadow-md shadow-sky-600/30 active:scale-95 disabled:bg-slate-400"
                   >
-                    {loginBusy ? (
-                      <span>Memproses...</span>
-                    ) : (
-                      <>
-                        <span>Masuk</span>
-                        <span>→</span>
-                      </>
-                    )}
+                    <span>{loginBusy ? "Memproses..." : "Masuk"}</span>
                   </button>
                 </div>
 
@@ -700,7 +693,7 @@ export default function PaskibrakaAuthSplit({
                       href="/sign-up"
                       className="text-red-600 hover:text-red-700 font-bold hover:underline"
                     >
-                      Daftar Akun Baru →
+                      Daftar Akun Baru
                     </Link>
                   </p>
                 </div>
@@ -825,7 +818,7 @@ export default function PaskibrakaAuthSplit({
                       href="/login"
                       className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition text-center flex items-center justify-center"
                     >
-                      ← Ke Login
+                      Ke Login
                     </Link>
 
                     <button
@@ -835,14 +828,13 @@ export default function PaskibrakaAuthSplit({
                         setRegError(null);
                         setRegStep(2);
                       }}
-                      className={`w-full py-2.5 rounded-xl text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-1.5 ${
+                      className={`w-full py-2.5 rounded-xl text-white font-bold text-xs transition shadow-md flex items-center justify-center ${
                         isStep1Valid
                           ? "bg-red-600 hover:bg-red-500 shadow-red-600/30 cursor-pointer"
                           : "bg-red-300 opacity-60 cursor-not-allowed"
                       }`}
                     >
                       <span>Lanjut Step 2</span>
-                      <span>→</span>
                     </button>
                   </div>
                 </div>
@@ -1062,7 +1054,7 @@ export default function PaskibrakaAuthSplit({
                       value={captchaInput}
                       onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
                       placeholder="MASUKKAN 5 KODE CAPTCHA DI ATAS"
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-center font-mono font-bold uppercase tracking-wider text-xs focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                      className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-center font-mono font-bold uppercase tracking-wider text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100 shadow-sm transition [color-scheme:light]"
                     />
                   </div>
 
@@ -1073,19 +1065,19 @@ export default function PaskibrakaAuthSplit({
                       onClick={() => setRegStep(1)}
                       className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition text-center flex items-center justify-center"
                     >
-                      ← Kembali ke Step 1
+                      Kembali ke Step 1
                     </button>
 
                     <button
                       type="submit"
                       disabled={!isStep2Valid || regBusy}
-                      className={`w-full py-2.5 rounded-xl text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-1.5 ${
+                      className={`w-full py-2.5 rounded-xl text-white font-bold text-xs transition shadow-md flex items-center justify-center ${
                         isStep2Valid && !regBusy
                           ? "bg-red-600 hover:bg-red-500 shadow-red-600/30 cursor-pointer"
                           : "bg-red-300 opacity-60 cursor-not-allowed"
                       }`}
                     >
-                      {regBusy ? "Mendaftarkan..." : "Daftar Akun Sekarang ✓"}
+                      {regBusy ? "Mendaftarkan..." : "Daftar Akun Sekarang"}
                     </button>
                   </div>
                 </form>
@@ -1172,7 +1164,7 @@ export default function PaskibrakaAuthSplit({
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     placeholder="nama@gmail.com"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:border-red-600 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 shadow-sm transition [color-scheme:light]"
                   />
                 </div>
 
@@ -1185,16 +1177,16 @@ export default function PaskibrakaAuthSplit({
                       setForgotError(null);
                       setForgotMessage(null);
                     }}
-                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={forgotBusy}
-                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 text-white text-xs font-bold shadow-md shadow-red-600/30"
+                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 text-white text-xs font-bold shadow-md shadow-red-600/30 transition"
                   >
-                    {forgotBusy ? "Mengirim..." : "Kirim OTP →"}
+                    {forgotBusy ? "Mengirim..." : "Kirim OTP"}
                   </button>
                 </div>
               </form>
@@ -1245,7 +1237,7 @@ export default function PaskibrakaAuthSplit({
                     value={forgotOtp}
                     onChange={(e) => setForgotOtp(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
                     placeholder="Contoh: 123456"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-center tracking-widest text-sm font-bold focus:border-red-600 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 font-mono text-center tracking-widest text-sm font-bold focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 shadow-sm transition [color-scheme:light]"
                   />
                 </div>
 
@@ -1260,7 +1252,7 @@ export default function PaskibrakaAuthSplit({
                     value={forgotNewPassword}
                     onChange={(e) => setForgotNewPassword(e.target.value)}
                     placeholder="Minimal 8 karakter..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:border-red-600 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 shadow-sm transition [color-scheme:light]"
                   />
                 </div>
 
@@ -1268,16 +1260,16 @@ export default function PaskibrakaAuthSplit({
                   <button
                     type="button"
                     onClick={() => setForgotStep(1)}
-                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
                   >
-                    ← Kembali
+                    Kembali
                   </button>
                   <button
                     type="submit"
                     disabled={forgotBusy}
-                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 text-white text-xs font-bold shadow-md shadow-red-600/30"
+                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 text-white text-xs font-bold shadow-md shadow-red-600/30 transition"
                   >
-                    {forgotBusy ? "Menyimpan..." : "Simpan Password ✓"}
+                    {forgotBusy ? "Menyimpan..." : "Simpan Password"}
                   </button>
                 </div>
               </form>

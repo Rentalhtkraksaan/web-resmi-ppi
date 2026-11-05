@@ -3,7 +3,12 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+}
+
+/* Memastikan semua form control memiliki warna bersih dan tidak hitam pekat */
+input, select, textarea {
+  color-scheme: light;
 }
 
 body {

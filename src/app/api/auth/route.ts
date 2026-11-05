@@ -439,10 +439,12 @@ export async function POST(req: NextRequest) {
       },
     }).catch(() => {});
 
-    // Kirim notifikasi email selamat datang secara async (non-blocking)
-    sendWelcomeEmail(newUser.email, newUser.fullName, newUser.username).catch((e) =>
-      console.warn("Gagal mengirim welcome email:", e)
-    );
+    // Kirim notifikasi email selamat datang (wajib di-await agar tidak diputus serverless)
+    try {
+      await sendWelcomeEmail(newUser.email, newUser.fullName, newUser.username);
+    } catch (e) {
+      console.warn("Gagal mengirim welcome email:", e);
+    }
 
     return response;
   }
