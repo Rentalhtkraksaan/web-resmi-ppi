@@ -333,6 +333,99 @@ export async function ensureSeeded() {
       }
     }
 
+    // 4. Ensure default Roadshow Posts (Berita & Agenda Kunjungan) exist
+    const postCount = await prisma.roadshowPost.count();
+    if (postCount === 0) {
+      await prisma.roadshowPost.createMany({
+        data: [
+          {
+            title: "SMKN 1 Kraksaan Jadi Titik Awal Roadshow Paskibraka Kabupaten Probolinggo 2026",
+            category: "Kunjungan Selesai",
+            status: "SUDAH_DIKUNJUNGI",
+            schoolName: "SMKN 1 KRAKSAAN",
+            location: "Kraksaan, Kab. Probolinggo",
+            date: "04 AGUSTUS 2026",
+            imageUrl: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=1000",
+            summary: "Kegiatan roadshow perdana sukses digelar dengan partisipasi lebih dari 120 siswa. Pengukuran tinggi dan berat badan serta wawasan kebangsaan terlaksana dengan khidmat.",
+            content: "Purna Paskibraka Indonesia (PPI) Kabupaten Probolinggo mengawali rangkaian PPI Goes to School 2026 di SMKN 1 Kraksaan. Antusiasme para pelajar sangat tinggi dalam mengikuti sosialisasi tahapan seleksi calon anggota Paskibraka. Tim panitia lapangan melakukan pengukuran fisik awal sesuai standar BPIP, dilanjutkan pembekalan mental ideologi Pancasila.",
+            sortOrder: 1,
+            isPublished: true,
+            author: "Penjab Roadshow",
+          },
+          {
+            title: "Antusiasme Ratusan Pelajar SMAN 1 Paiton Ikuti Pengukuran Fisik Pra-Seleksi",
+            category: "Kunjungan Selesai",
+            status: "SUDAH_DIKUNJUNGI",
+            schoolName: "SMAN 1 PAITON",
+            location: "Paiton, Kab. Probolinggo",
+            date: "08 JULI 2026",
+            imageUrl: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1000",
+            summary: "Sebanyak 85 calon peserta telah terdata melalui sistem barcode roadshow PPI. Seluruh berkas dan catatan fisik telah diverifikasi oleh tim penilai.",
+            content: "Kunjungan roadshow di SMAN 1 Paiton berlangsung dinamis dan interaktif. Selain pengukuran tinggi dan berat badan, para siswa juga diberikan gambaran nyata mengenai kedisiplinan dan kebanggaan menjadi bagian dari pasukan pengibar bendera pusaka di tingkat kabupaten maupun nasional.",
+            sortOrder: 2,
+            isPublished: true,
+            author: "Penjab Roadshow",
+          },
+          {
+            title: "Sosialisasi Kedisiplinan dan Pra-Seleksi Paskibraka di SMAN 1 Gading Rampung Dilaksanakan",
+            category: "Kunjungan Selesai",
+            status: "SUDAH_DIKUNJUNGI",
+            schoolName: "SMAN 1 GADING",
+            location: "Gading, Kab. Probolinggo",
+            date: "21 NOVEMBER 2025",
+            imageUrl: "https://images.unsplash.com/photo-1577495508048-b635879837f1?q=80&w=1000",
+            summary: "Tim Roadshow PPI Kabupaten Probolinggo menyelesaikan sesi sosialisasi dan penjaringan bakat kepemimpinan pemuda di kawasan Gading.",
+            content: "Pelaksanaan di SMAN 1 Gading membuahkan hasil penjaringan talenta-talenta muda yang berpostur ideal dan memiliki semangat pengabdian tinggi. Seluruh calon peserta yang memenuhi kriteria telah dimasukkan ke dalam basis data pra-seleksi resmi.",
+            sortOrder: 3,
+            isPublished: true,
+            author: "Penjab Roadshow",
+          },
+          {
+            title: "Agenda Kunjungan PPI Roadshow Siap Sambangi SMKN 1 Kotaanyar Pekan Depan",
+            category: "Agenda Kunjungan",
+            status: "AKAN_DIKUNJUNGI",
+            schoolName: "SMKN 1 KOTAANYAR",
+            location: "Kotaanyar, Kab. Probolinggo",
+            date: "05 DESEMBER 2026",
+            imageUrl: "",
+            summary: "Persiapan teknis dan koordinasi dengan pihak sekolah telah dimatangkan. Siswa kelas X dan XI dihimbau mempersiapkan fisik prima.",
+            content: "Tim Penjab Roadshow PPI Kabupaten Probolinggo mengonfirmasi jadwal kunjungan ke SMKN 1 Kotaanyar. Acara akan dimulai pukul 08:00 WIB di aula sekolah, mencakup pemaparan alur seleksi nasional BPIP dan pengukuran standar fisik.",
+            sortOrder: 4,
+            isPublished: true,
+            author: "Penjab Roadshow",
+          },
+          {
+            title: "Persiapan Menuju Seleksi Kabupaten: Jadwal Kunjungan ke SMAN 1 Maron",
+            category: "Agenda Kunjungan",
+            status: "AKAN_DIKUNJUNGI",
+            schoolName: "SMAN 1 MARON",
+            location: "Maron, Kab. Probolinggo",
+            date: "07 OKTOBER 2026",
+            imageUrl: "",
+            summary: "Rangkaian roadshow wilayah tengah segera berlanjut ke SMAN 1 Maron untuk menjaring calon putra-putri terbaik.",
+            content: "Bagi para siswa yang berminat mengikuti seleksi Paskibraka Kabupaten Probolinggo 2027, persiapkan data diri dan latihan fisik dasar. Tim penilai PPI akan hadir langsung untuk memberikan arahan dan verifikasi awal.",
+            sortOrder: 5,
+            isPublished: true,
+            author: "Penjab Roadshow",
+          },
+          {
+            title: "Rangkaian Roadshow Wilayah Barat: SMKN 1 Dringu Siap Menyambut Tim PPI",
+            category: "Agenda Kunjungan",
+            status: "AKAN_DIKUNJUNGI",
+            schoolName: "SMKN 1 DRINGU",
+            location: "Dringu, Kab. Probolinggo",
+            date: "08 JULI 2026",
+            imageUrl: "",
+            summary: "Wilayah Dringu menjadi salah satu fokus penjaringan calon paskibraka dengan antusiasme pendaftar yang tinggi.",
+            content: "Penjab Roadshow bersama tim verifikator menjadwalkan kunjungan resmi ke SMKN 1 Dringu. Pengukuran tinggi dan berat badan serta penjelasan hak dan kewajiban peserta akan disampaikan secara transparan.",
+            sortOrder: 6,
+            isPublished: true,
+            author: "Penjab Roadshow",
+          },
+        ],
+      });
+    }
+
     isSeeded = true;
   } catch (err) {
     console.error("Seed error:", err);

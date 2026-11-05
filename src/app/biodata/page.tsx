@@ -8,10 +8,10 @@ export default function BiodataDeveloperPage() {
     <div className="min-h-screen bg-[#0a0a0c] text-zinc-100 py-12 px-4 flex items-center justify-center">
       <div className="w-full max-w-4xl bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-10 shadow-2xl">
         {/* Top Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-zinc-800">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-6 border-b border-zinc-800">
           <Link
             href="/"
-            className="px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 transition"
+            className="px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 transition text-center"
           >
             ← Kembali ke Beranda
           </Link>
@@ -20,7 +20,7 @@ export default function BiodataDeveloperPage() {
             href="https://cv-aditya.vercel.app"
             target="_blank"
             rel="noreferrer"
-            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider transition shadow-lg"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider transition shadow-lg text-center truncate"
           >
             Kunjungi Website Resmi: cv-aditya.vercel.app ↗
           </a>
@@ -116,7 +116,7 @@ export default function BiodataDeveloperPage() {
                     href="https://cv-aditya.vercel.app"
                     target="_blank"
                     rel="noreferrer"
-                    className="font-semibold text-sky-400 hover:underline"
+                    className="font-semibold text-sky-400 hover:underline break-all text-right"
                   >
                     https://cv-aditya.vercel.app
                   </a>

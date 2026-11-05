@@ -63,13 +63,16 @@ async function getRoadshowAccess() {
     perms = {};
   }
 
-  const isAdminRoadshow = dbUser.role === "ADMIN" && Boolean(perms.manageRoadshow);
+  // Penjab Roadshow can be role PENJAB_ROADSHOW, ADMIN with manageRoadshow, or any ADMIN
+  const isAdminRoadshow =
+    dbUser.role === "PENJAB_ROADSHOW" ||
+    (dbUser.role === "ADMIN" && (Boolean(perms.manageRoadshow) || perms.manageLanding !== false));
 
   // Every Panitia (USER) or Admin Roadshow gets full access to Registrasi, Tabel BB, and Tabel TB once QR is scanned
   const canInputBB = true;
   const canInputTB = true;
   const canInputRegistrasi = true;
-  const isUserRoadshow = dbUser.role === "USER" || isAdminRoadshow;
+  const isUserRoadshow = dbUser.role === "USER" || dbUser.role === "PENJAB_ROADSHOW" || isAdminRoadshow;
 
   return {
     session: {
@@ -95,30 +98,52 @@ export async function GET(req: NextRequest) {
   // =========================================================================
   // MODE: PUBLIC (/roadshow)
   // Only returns Schools + Candidates that PASSED (hasilLulus: true) and are PUBLISHED (statusTayang: true)
+  // Plus all official Roadshow Posts (Sudah Dikunjungi & Akan Dikunjungi)
   // =========================================================================
   if (mode === "public") {
-    const schools = await prisma.roadshowSchool.findMany({
-      orderBy: { createdAt: "asc" },
-      include: {
-        candidates: {
-          where: {
-            hasilLulus: true,
-            statusTayang: true,
-          },
-          orderBy: { nama: "asc" },
-          select: {
-            id: true,
-            kodePeserta: true,
-            nama: true,
-            jenisKelamin: true,
-            schoolId: true,
-            hasilLulus: true,
-            statusTayang: true,
-            keterangan: true,
+    const [schools, allSchoolsForSchedule, posts] = await Promise.all([
+      prisma.roadshowSchool.findMany({
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        include: {
+          candidates: {
+            where: {
+              hasilLulus: true,
+              statusTayang: true,
+            },
+            orderBy: { nama: "asc" },
+            select: {
+              id: true,
+              kodePeserta: true,
+              nama: true,
+              jenisKelamin: true,
+              schoolId: true,
+              hasilLulus: true,
+              statusTayang: true,
+              keterangan: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.roadshowSchool.findMany({
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          namaSekolah: true,
+          lokasi: true,
+          tanggal: true,
+          statusPenilaian: true,
+          sortOrder: true,
+          documentationPhoto: true,
+          documentationTitle: true,
+          documentationDate: true,
+          documentationLocation: true,
+        },
+      }),
+      prisma.roadshowPost.findMany({
+        where: { isPublished: true },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+      }),
+    ]);
 
     return NextResponse.json({
       schools: schools.map((s) => ({
@@ -127,10 +152,29 @@ export async function GET(req: NextRequest) {
         lokasi: s.lokasi,
         tanggal: s.tanggal,
         statusPenilaian: s.statusPenilaian,
+        sortOrder: s.sortOrder,
         passedCount: s.candidates.length,
         candidates: s.candidates,
       })),
+      schedule: allSchoolsForSchedule,
+      posts,
     });
+  }
+
+  // =========================================================================
+  // MODE: POSTS (/api/roadshow?mode=posts)
+  // =========================================================================
+  if (mode === "posts") {
+    const status = searchParams.get("status");
+    const where: any = {};
+    if (status && status !== "ALL") {
+      where.status = status;
+    }
+    const posts = await prisma.roadshowPost.findMany({
+      where,
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+    });
+    return NextResponse.json({ posts });
   }
 
   // =========================================================================
@@ -432,6 +476,143 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, candidate });
   }
 
+  // 3. Deactivate School with Mandatory Documentation (Photo, Title, Location, Date)
+  if (action === "deactivate_school_with_documentation") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json(
+        { error: "Hanya Super Admin atau Penjab Roadshow yang dapat menutup sesi sekolah." },
+        { status: 403 }
+      );
+    }
+
+    const schoolId = String(body.schoolId || "");
+    const photoUrl = String(body.photoUrl || "").trim();
+    const namaKegiatan = sanitizeString(String(body.namaKegiatan || "")).trim();
+    const lokasi = sanitizeString(String(body.lokasi || "")).trim();
+    const tanggal = sanitizeString(String(body.tanggal || "")).trim();
+
+    if (!schoolId) {
+      return NextResponse.json({ error: "ID sekolah wajib diisi." }, { status: 400 });
+    }
+    if (!photoUrl || !namaKegiatan || !lokasi || !tanggal) {
+      return NextResponse.json(
+        {
+          error:
+            "Wajib mengunggah minimal 1 foto dokumentasi, nama kegiatan, lokasi, dan tanggal sebelum menonaktifkan sesi sekolah!",
+        },
+        { status: 400 }
+      );
+    }
+
+    const school = await prisma.roadshowSchool.findUnique({ where: { id: schoolId } });
+    if (!school) {
+      return NextResponse.json({ error: "Sekolah tidak ditemukan." }, { status: 404 });
+    }
+
+    const updatedSchool = await prisma.roadshowSchool.update({
+      where: { id: schoolId },
+      data: {
+        statusPenilaian: "Ditutup",
+        documentationPhoto: photoUrl,
+        documentationTitle: namaKegiatan,
+        documentationDate: tanggal,
+        documentationLocation: lokasi,
+        closedAt: new Date(),
+      },
+    });
+
+    // Otomatis terbitkan ke Kegiatan PPI Roadshow di Landing Page (ROADSHOW_GALLERY)
+    const galleryItem = await prisma.landingItem.create({
+      data: {
+        section: "ROADSHOW_GALLERY",
+        title: namaKegiatan,
+        imageUrl: photoUrl,
+        metaLocation: lokasi,
+        metaDay: "Roadshow Resmi",
+        metaDate: tanggal,
+        description: `Dokumentasi resmi penutupan roadshow seleksi Paskibraka di ${school.namaSekolah}.`,
+        sortOrder: 0,
+      },
+    });
+
+    // Otomatis terbitkan ke Berita & Dokumentasi Roadshow (SUDAH_DIKUNJUNGI)
+    await prisma.roadshowPost.create({
+      data: {
+        title: namaKegiatan,
+        category: "Kunjungan Selesai",
+        status: "SUDAH_DIKUNJUNGI",
+        schoolId: school.id,
+        schoolName: school.namaSekolah,
+        location: lokasi,
+        date: tanggal,
+        imageUrl: photoUrl,
+        summary: `Roadshow pengukuran fisik dan sosialisasi di ${school.namaSekolah} telah selesai dilaksanakan dengan sukses.`,
+        content: `Kegiatan roadshow resmi PPI Kabupaten Probolinggo di ${school.namaSekolah} telah ditutup. Seluruh data peserta telah terekam dalam sistem digital dan verifikasi calon kandidat pra-seleksi siap diterbitkan.`,
+        sortOrder: 0,
+        isPublished: true,
+        author: session.fullName,
+      },
+    }).catch(() => {});
+
+    if (school.firebaseKey) {
+      await firebasePut(ROADSHOW_RTDB_URL, `sekolah/${school.firebaseKey}`, {
+        namaSekolah: school.namaSekolah,
+        statusPenilaian: "Ditutup",
+      });
+    }
+
+    await prisma.securityAuditLog.create({
+      data: {
+        actorName: session.fullName,
+        actorRole: session.role,
+        action: "DEACTIVATE_SCHOOL_WITH_DOCS",
+        details: `Menutup sesi roadshow ${school.namaSekolah} & menerbitkan foto dokumentasi ke Landing Page`,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      school: updatedSchool,
+      galleryItem,
+    });
+  }
+
+  // 4. Create Roadshow Post (Berita & Agenda Kunjungan - Penjab Roadshow & Super Admin)
+  if (action === "create_post") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json(
+        { error: "Hanya Penjab Roadshow atau Super Admin yang dapat membuat berita." },
+        { status: 403 }
+      );
+    }
+    const title = sanitizeString(String(body.title || "")).trim();
+    if (!title) {
+      return NextResponse.json({ error: "Judul berita wajib diisi." }, { status: 400 });
+    }
+
+    const postStatus = body.status === "AKAN_DIKUNJUNGI" ? "AKAN_DIKUNJUNGI" : "SUDAH_DIKUNJUNGI";
+
+    const post = await prisma.roadshowPost.create({
+      data: {
+        title,
+        category: sanitizeString(String(body.category || "Kunjungan Sekolah")),
+        status: postStatus,
+        schoolId: body.schoolId ? String(body.schoolId) : null,
+        schoolName: sanitizeString(String(body.schoolName || "")),
+        location: sanitizeString(String(body.location || "Kab. Probolinggo")),
+        date: sanitizeString(String(body.date || "")),
+        imageUrl: postStatus === "AKAN_DIKUNJUNGI" ? "" : String(body.imageUrl || "").trim(),
+        summary: sanitizeString(String(body.summary || "")),
+        content: sanitizeString(String(body.content || "")),
+        isPublished: body.isPublished !== false,
+        author: session.fullName,
+        sortOrder: Number(body.sortOrder) || 0,
+      },
+    });
+
+    return NextResponse.json({ success: true, post });
+  }
+
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
@@ -542,14 +723,19 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    const updateData: Record<string, any> = {
+      beratBadan,
+      tinggiBadan,
+      hasilLulus,
+      updatedBy: session.fullName,
+    };
+    if (body.keterangan !== undefined) {
+      updateData.keterangan = sanitizeString(String(body.keterangan));
+    }
+
     const updated = await prisma.roadshowCandidate.update({
       where: { id: candidateId },
-      data: {
-        beratBadan,
-        tinggiBadan,
-        hasilLulus,
-        updatedBy: session.fullName,
-      },
+      data: updateData,
     });
 
     // Sync to Firebase Roadshow DB
@@ -698,6 +884,68 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: true, school: updated });
   }
 
+  // 6. Update Official Roadshow Schedule (Date, Order, Location, Status)
+  if (action === "update_schedule") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json({ error: "Khusus Super Admin atau Penjab Roadshow." }, { status: 403 });
+    }
+    const schoolId = String(body.schoolId || "");
+    const existing = await prisma.roadshowSchool.findUnique({ where: { id: schoolId } });
+    if (!existing) return NextResponse.json({ error: "Sekolah tidak ditemukan" }, { status: 404 });
+
+    const updateData: Record<string, any> = {};
+    if (body.sortOrder !== undefined) updateData.sortOrder = Number(body.sortOrder) || 0;
+    if (body.tanggal !== undefined) updateData.tanggal = sanitizeString(String(body.tanggal));
+    if (body.lokasi !== undefined) updateData.lokasi = sanitizeString(String(body.lokasi));
+    if (body.statusPenilaian !== undefined) {
+      const sp = sanitizeString(String(body.statusPenilaian));
+      if (["Dibuka", "Ditutup", "Hari Ini", "Akan Datang"].includes(sp)) {
+        updateData.statusPenilaian = sp;
+      }
+    }
+
+    const updated = await prisma.roadshowSchool.update({
+      where: { id: schoolId },
+      data: updateData,
+    });
+
+    return NextResponse.json({ success: true, school: updated });
+  }
+
+  // 7. Update Roadshow Post (Berita / Agenda Kunjungan)
+  if (action === "update_post") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json(
+        { error: "Hanya Penjab Roadshow atau Super Admin yang dapat mengubah berita." },
+        { status: 403 }
+      );
+    }
+    const id = String(body.id || "");
+    if (!id) return NextResponse.json({ error: "ID berita wajib diisi." }, { status: 400 });
+
+    const postStatus = body.status === "AKAN_DIKUNJUNGI" ? "AKAN_DIKUNJUNGI" : "SUDAH_DIKUNJUNGI";
+
+    const post = await prisma.roadshowPost.update({
+      where: { id },
+      data: {
+        title: sanitizeString(String(body.title || "")),
+        category: sanitizeString(String(body.category || "Kunjungan Sekolah")),
+        status: postStatus,
+        schoolId: body.schoolId ? String(body.schoolId) : null,
+        schoolName: sanitizeString(String(body.schoolName || "")),
+        location: sanitizeString(String(body.location || "Kab. Probolinggo")),
+        date: sanitizeString(String(body.date || "")),
+        imageUrl: postStatus === "AKAN_DIKUNJUNGI" ? "" : String(body.imageUrl || "").trim(),
+        summary: sanitizeString(String(body.summary || "")),
+        content: sanitizeString(String(body.content || "")),
+        isPublished: body.isPublished !== false,
+        sortOrder: Number(body.sortOrder) || 0,
+      },
+    });
+
+    return NextResponse.json({ success: true, post });
+  }
+
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
@@ -715,6 +963,22 @@ export async function DELETE(req: NextRequest) {
   const type = searchParams.get("type");
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID diperlukan" }, { status: 400 });
+
+  if (type === "post") {
+    const existing = await prisma.roadshowPost.findUnique({ where: { id } });
+    if (existing) {
+      await prisma.roadshowPost.delete({ where: { id } });
+      await prisma.securityAuditLog.create({
+        data: {
+          actorName: session.fullName,
+          actorRole: session.role,
+          action: "DELETE_ROADSHOW_POST",
+          details: `Menghapus berita roadshow "${existing.title}"`,
+        },
+      });
+    }
+    return NextResponse.json({ success: true });
+  }
 
   if (type === "candidate") {
     const existing = await prisma.roadshowCandidate.findUnique({ where: { id } });

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { UMUM_RTDB_URL } from "@/lib/firebase";
+import { showConfirm, showError, showSuccess } from "@/lib/swal";
 
 interface LandingConfig {
   heroTitle: string;
@@ -10,6 +11,20 @@ interface LandingConfig {
   heroCtaText: string;
   heroCtaUrl: string;
   waAdminMerch: string;
+  suratEdaranTitle?: string;
+  suratEdaranDesc?: string;
+  suratEdaranUrl?: string;
+  suratEdaranVisible?: boolean;
+  suratEdaranStatus?: string;
+}
+
+interface RoadshowScheduleItem {
+  id: string;
+  namaSekolah: string;
+  lokasi: string;
+  tanggal: string;
+  statusPenilaian: string;
+  sortOrder: number;
 }
 
 interface LandingItem {
@@ -73,6 +88,7 @@ export default function LandingPage() {
   const [config, setConfig] = useState<LandingConfig | null>(null);
   const [items, setItems] = useState<LandingItem[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [roadshowSchedule, setRoadshowSchedule] = useState<RoadshowScheduleItem[]>([]);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [visitCount, setVisitCount] = useState<number>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -102,9 +118,10 @@ export default function LandingPage() {
 
   const loadData = async () => {
     try {
-      const [landingRes, authRes] = await Promise.all([
+      const [landingRes, authRes, roadshowRes] = await Promise.all([
         fetch("/api/landing", { cache: "no-store" }),
         fetch("/api/auth", { cache: "no-store" }),
+        fetch("/api/roadshow?mode=public", { cache: "no-store" }),
       ]);
       if (landingRes.ok) {
         const data = await landingRes.json();
@@ -115,6 +132,10 @@ export default function LandingPage() {
       if (authRes.ok) {
         const authData = await authRes.json();
         setUser(authData.authenticated ? authData.user : null);
+      }
+      if (roadshowRes.ok) {
+        const rsData = await roadshowRes.json();
+        setRoadshowSchedule(rsData.schedule || []);
       }
     } catch (e) {
       console.error("Landing data load error:", e);
@@ -155,7 +176,7 @@ export default function LandingPage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(nextVal),
-        }).catch(() => {});
+        }).catch(() => { });
       } catch {
         setVisitCount((prev) => Math.max(prev, 0) + 1);
       }
@@ -287,7 +308,7 @@ export default function LandingPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (/\.php[0-9]*$|\.phtml$|\.phar$/i.test(file.name)) {
-      alert("File PHP dilarang keras!");
+      await showError("File PHP dilarang keras!");
       e.target.value = "";
       return;
     }
@@ -301,7 +322,7 @@ export default function LandingPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Gagal upload gambar");
+        await showError(data.error || "Gagal upload gambar");
       } else {
         setItemImage(data.url);
       }
@@ -341,7 +362,7 @@ export default function LandingPage() {
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (/\.php/i.test(itemTitle) || /\.php/i.test(itemSubtitle) || /\.php/i.test(itemDesc)) {
-      alert("Input tidak boleh mengandung file atau script .php!");
+      await showError("Input tidak boleh mengandung file atau script .php!");
       return;
     }
     const method = editingItem ? "PUT" : "POST";
@@ -364,23 +385,36 @@ export default function LandingPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Gagal menyimpan item");
+      showError("Gagal Menyimpan", data.error || "Gagal menyimpan item");
       return;
     }
     setItemModalOpen(false);
+    showSuccess("Berhasil Disimpan", "Konten landing page telah diperbarui.");
     loadData();
   };
 
   const handleDeleteItem = async (id: string, title: string) => {
-    if (!confirm(`Hapus "${title}"?`)) return;
+    const confirmRes = await showConfirm("Konfirmasi Hapus", `Hapus item "${title}"?`);
+    if (!confirmRes.isConfirmed) return;
     const res = await fetch(`/api/landing?type=item&id=${id}`, { method: "DELETE" });
-    if (res.ok) loadData();
+    if (res.ok) {
+      await showSuccess("Terhapus", `"${title}" berhasil dihapus.`);
+      loadData();
+    } else {
+      showError("Gagal Menghapus", "Terjadi kesalahan saat menghapus data.");
+    }
   };
 
   const handleDeleteReview = async (id: string, nama: string) => {
-    if (!confirm(`Hapus ulasan dari "${nama}"?`)) return;
+    const confirmRes = await showConfirm("Hapus Ulasan", `Hapus ulasan dari "${nama}" secara permanen dari database?`);
+    if (!confirmRes.isConfirmed) return;
     const res = await fetch(`/api/landing?type=review&id=${id}`, { method: "DELETE" });
-    if (res.ok) loadData();
+    if (res.ok) {
+      await showSuccess("Ulasan Dihapus", "Ulasan berhasil dihapus dari database.");
+      loadData();
+    } else {
+      showError("Gagal Menghapus", "Tidak memiliki izin atau sesi login Anda telah berakhir.");
+    }
   };
 
   const directOrderWA = (name: string, price: string) => {
@@ -397,24 +431,24 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-40 bg-[#0a0a0c]/85 backdrop-blur-md border-b border-white/10 px-5 lg:px-12 py-3 transition">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo, Identitas & Total Kunjungan */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group min-w-0">
+            <div className="relative shrink-0">
               <img
                 src="/logo.jpg"
                 alt="Logo PPI Kabupaten Probolinggo"
-                className="w-10 h-10 rounded-full object-cover border border-amber-400/50 shadow-md group-hover:scale-105 transition"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-amber-400/50 shadow-md group-hover:scale-105 transition"
               />
-              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-600 border-2 border-zinc-950 rounded-full" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-red-600 border-2 border-zinc-950 rounded-full" />
             </div>
-            <div>
-              <span className="font-extrabold tracking-wide text-xs sm:text-sm text-white block leading-tight">
+            <div className="min-w-0">
+              <span className="font-extrabold tracking-wide text-xs sm:text-sm text-white block leading-tight truncate max-w-[150px] sm:max-w-none">
                 PPI KAB. PROBOLINGGO
               </span>
               {/* TOTAL KUNJUNGAN JELAS TERPAMPANG DI NAVBAR */}
-              <span className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] sm:text-[11px] text-zinc-400 font-medium flex items-center gap-1.5 mt-0.5 truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 {visitCount > 0 ? (
-                  <span>
+                  <span className="truncate">
                     <strong className="text-zinc-200">{visitCount.toLocaleString("id-ID")}</strong> Total Kunjungan
                   </span>
                 ) : (
@@ -530,18 +564,29 @@ export default function LandingPage() {
               <span>Cek Hasil Pra-Seleksi</span>
             </Link>
 
-            {/* Tombol 2: Unduh Surat Edaran Resmi (Segera Hadir) */}
-            <button
-              type="button"
-              onClick={() => setShowSuratEdaranModal(true)}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-xs sm:text-sm bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white backdrop-blur-md transition shadow-sm flex items-center justify-center gap-2 active:scale-95"
-            >
-              <span>📄</span>
-              <span>Unduh Surat Edaran</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                Segera Hadir
-              </span>
-            </button>
+            {/* Tombol 2: Unduh Surat Edaran Resmi */}
+            {config?.suratEdaranVisible !== false && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (config?.suratEdaranUrl && config.suratEdaranUrl !== "#" && config.suratEdaranStatus === "Tersedia") {
+                    window.open(config.suratEdaranUrl, "_blank");
+                  } else {
+                    setShowSuratEdaranModal(true);
+                  }
+                }}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-xs sm:text-sm bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white backdrop-blur-md transition shadow-sm flex items-center justify-center gap-2 active:scale-95"
+              >
+                <span>📄</span>
+                <span>{config?.suratEdaranTitle || "Unduh Surat Edaran"}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${config?.suratEdaranStatus === "Tersedia"
+                    ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                    : "bg-amber-400/20 text-amber-300 border border-amber-400/30"
+                  }`}>
+                  {config?.suratEdaranStatus || "Segera Hadir"}
+                </span>
+              </button>
+            )}
 
             {/* Tombol Tambahan Admin (Hanya jika login) */}
             {canManageLanding && (
@@ -867,8 +912,8 @@ export default function LandingPage() {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-500/40">
                             {item.angkatan && item.angkatan !== "-"
                               ? (String(item.angkatan).toLowerCase().startsWith("ppi")
-                                  ? String(item.angkatan).toUpperCase()
-                                  : `PPI-${item.angkatan}`)
+                                ? String(item.angkatan).toUpperCase()
+                                : `PPI-${item.angkatan}`)
                               : "PPI"}
                           </span>
                         ) : (
@@ -959,7 +1004,7 @@ export default function LandingPage() {
             {allGalleryItems.map((item) => (
               <div
                 key={item.id}
-                className="snap-start shrink-0 w-[290px] sm:w-[340px] group rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 flex flex-col justify-between shadow-lg"
+                className="snap-start shrink-0 w-[82vw] max-w-[340px] sm:w-[340px] group rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 flex flex-col justify-between shadow-lg"
               >
                 <div>
                   <div className="relative h-56 overflow-hidden bg-zinc-950">
@@ -1301,17 +1346,28 @@ export default function LandingPage() {
               </Link>
 
               {/* Tombol Unduh Surat Edaran */}
-              <button
-                type="button"
-                onClick={() => setShowSuratEdaranModal(true)}
-                className="px-5 py-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white font-bold text-xs sm:text-sm transition flex items-center gap-2"
-              >
-                <span>📄</span>
-                <span>Unduh Surat Edaran Resmi</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  Segera Hadir
-                </span>
-              </button>
+              {config?.suratEdaranVisible !== false && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (config?.suratEdaranUrl && config.suratEdaranUrl !== "#" && config.suratEdaranStatus === "Tersedia") {
+                      window.open(config.suratEdaranUrl, "_blank");
+                    } else {
+                      setShowSuratEdaranModal(true);
+                    }
+                  }}
+                  className="px-5 py-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white font-bold text-xs sm:text-sm transition flex items-center gap-2"
+                >
+                  <span>📄</span>
+                  <span>{config?.suratEdaranTitle || "Unduh Surat Edaran Resmi"}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${config?.suratEdaranStatus === "Tersedia"
+                      ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                      : "bg-amber-400/20 text-amber-300 border border-amber-400/30"
+                    }`}>
+                    {config?.suratEdaranStatus || "Segera Hadir"}
+                  </span>
+                </button>
+              )}
 
               {/* Tombol Akses Portal BPIP */}
               <a
@@ -1327,6 +1383,94 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ===================================================================== */}
+      {/* JADWAL RESMI KUNJUNGAN PPI ROADSHOW SEKOLAH                           */}
+      {/* ===================================================================== */}
+      {roadshowSchedule.length > 0 && (
+        <section id="jadwal-roadshow" className="py-20 px-5 bg-[#09090b] border-b border-zinc-900">
+          <div className="max-w-6xl mx-auto space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                <span className="px-3 py-1 rounded-full bg-red-600/10 border border-red-500/30 text-red-400 text-xs font-bold uppercase tracking-wider inline-block mb-2">
+                  Agenda Resmi
+                </span>
+                <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
+                  Jadwal Kunjungan PPI Roadshow
+                </h2>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                  Urutan resmi kunjungan tim sosialisasi dan pra-seleksi fisik calon Paskibraka ke SMA/SMK/MA se-Kabupaten Probolinggo.
+                </p>
+              </div>
+
+              <Link
+                href="/roadshow"
+                className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition shadow-md shadow-red-600/20"
+              >
+                Cek Hasil Kelulusan Siswa →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {roadshowSchedule.map((s, idx) => {
+                const isToday = s.statusPenilaian === "Hari Ini";
+                const isDone = s.statusPenilaian === "Ditutup" || s.statusPenilaian === "Selesai";
+                return (
+                  <div
+                    key={s.id}
+                    className={`rounded-2xl p-5 border transition flex flex-col justify-between gap-4 ${isToday
+                        ? "bg-gradient-to-b from-red-950/40 to-zinc-900 border-red-500/60 shadow-lg shadow-red-950/30 ring-1 ring-red-500/40"
+                        : isDone
+                          ? "bg-zinc-900/60 border-zinc-800/80"
+                          : "bg-zinc-900 border-zinc-800"
+                      }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-zinc-500">
+                          #{String(idx + 1).padStart(2, "0")}
+                        </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isToday
+                              ? "bg-red-500 text-white animate-pulse"
+                              : isDone
+                                ? "bg-emerald-950 text-emerald-300 border border-emerald-500/30"
+                                : "bg-zinc-800 text-zinc-300 border border-zinc-700"
+                            }`}
+                        >
+                          {isToday ? "★ Sedang Berlangsung" : isDone ? "✓ Sudah Dikunjungi" : "⏳ Akan Dikunjungi"}
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-bold text-white tracking-tight">
+                        {s.namaSekolah}
+                      </h3>
+
+                      <div className="space-y-1 text-xs text-zinc-400">
+                        <div className="flex items-center gap-1.5">
+                          <span>📅</span>
+                          <span>{s.tanggal && s.tanggal !== "-" ? s.tanggal : "Menyesuaikan Jadwal"}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span>📍</span>
+                          <span>{s.lokasi || "Kab. Probolinggo"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs">
+                      <span className="text-[11px] text-zinc-400 font-medium">Status Pra-Seleksi:</span>
+                      <span className="font-semibold text-zinc-300">
+                        {isDone ? "Data Tersimpan" : isToday ? "Pengukuran Aktif" : "Menunggu Giliran"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===================================================================== */}
       {/* 9. FOOTER (KAKI HALAMAN)                                              */}
@@ -1438,9 +1582,9 @@ export default function LandingPage() {
       </footer>
 
       {/* ===================================================================== */}
-      {/* MODAL: UNDUH SURAT EDARAN RESMI (SEGERA HADIR)                        */}
+      {/* MODAL: UNDUH SURAT EDARAN RESMI                                       */}
       {/* ===================================================================== */}
-      {showSuratEdaranModal && (
+      {showSuratEdaranModal && config?.suratEdaranVisible !== false && (
         <div
           onClick={() => setShowSuratEdaranModal(false)}
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
@@ -1454,22 +1598,36 @@ export default function LandingPage() {
             </div>
 
             <div className="text-center space-y-1.5">
-              <span className="inline-block px-3 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
-                Status: Segera Hadir
+              <span className={`inline-block px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config?.suratEdaranStatus === "Tersedia"
+                  ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                  : "bg-amber-400/20 text-amber-300 border border-amber-400/30"
+                }`}>
+                Status: {config?.suratEdaranStatus || "Segera Hadir"}
               </span>
               <h3 className="text-lg font-bold text-white">
-                Surat Edaran Resmi Pra-Seleksi
+                {config?.suratEdaranTitle || "Surat Edaran Resmi Pra-Seleksi"}
               </h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Surat Edaran kelulusan pra-seleksi saat ini dalam proses penandatanganan dan penomoran resmi
-                Bakesbangpol Kabupaten Probolinggo.
+                {config?.suratEdaranDesc || "Surat Edaran kelulusan pra-seleksi saat ini dalam proses penandatanganan dan penomoran resmi Bakesbangpol Kabupaten Probolinggo."}
               </p>
             </div>
+
+            {config?.suratEdaranUrl && config.suratEdaranStatus === "Tersedia" && (
+              <a
+                href={config.suratEdaranUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-lg shadow-red-600/30"
+              >
+                <span>📥</span>
+                <span>Unduh File Surat Edaran Sekarang</span>
+              </a>
+            )}
 
             <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-2 text-xs">
               <div className="font-semibold text-white flex items-center gap-2">
                 <span>📌</span>
-                <span>Berkas Pendukung yang Tersedia:</span>
+                <span>Berkas Pendukung Terlampir:</span>
               </div>
               <div className="space-y-1 pl-5">
                 <a
@@ -1496,7 +1654,7 @@ export default function LandingPage() {
               onClick={() => setShowSuratEdaranModal(false)}
               className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition"
             >
-              Tutup Pemberitahuan
+              Tutup
             </button>
           </div>
         </div>
@@ -1554,8 +1712,8 @@ export default function LandingPage() {
                   ? "Edit Tombol Utama Hero"
                   : "Tambah Tombol Utama Hero"
                 : editingItem
-                ? "Edit Item & Gambar"
-                : "Tambah Item Baru"}
+                  ? "Edit Item & Gambar"
+                  : "Tambah Item Baru"}
             </h3>
 
             <form onSubmit={handleSaveItem} className="space-y-4 text-sm">

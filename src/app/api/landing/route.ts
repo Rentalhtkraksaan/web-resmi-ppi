@@ -287,6 +287,11 @@ export async function PUT(req: NextRequest) {
       if (body.bukberDate !== undefined) data.bukberDate = sanitizeString(String(body.bukberDate));
       if (body.bukberLocation !== undefined) data.bukberLocation = sanitizeString(String(body.bukberLocation));
       if (body.bukberHtm !== undefined) data.bukberHtm = sanitizeString(String(body.bukberHtm));
+      if (body.suratEdaranTitle !== undefined) data.suratEdaranTitle = sanitizeString(String(body.suratEdaranTitle));
+      if (body.suratEdaranDesc !== undefined) data.suratEdaranDesc = sanitizeString(String(body.suratEdaranDesc));
+      if (body.suratEdaranUrl !== undefined) data.suratEdaranUrl = String(body.suratEdaranUrl).trim();
+      if (body.suratEdaranVisible !== undefined) data.suratEdaranVisible = Boolean(body.suratEdaranVisible);
+      if (body.suratEdaranStatus !== undefined) data.suratEdaranStatus = sanitizeString(String(body.suratEdaranStatus));
     }
     if (perms.manageMerchandise || perms.manageLanding) {
       if (body.waAdminMerch !== undefined) data.waAdminMerch = sanitizeString(String(body.waAdminMerch));
@@ -413,6 +418,29 @@ export async function DELETE(req: NextRequest) {
         details: `Menghapus item [${existing.section}] "${existing.title}"`,
       },
     });
+    return NextResponse.json({ success: true });
+  }
+
+  if (type === "surat_edaran") {
+    if (!perms.manageLanding) {
+      return NextResponse.json({ error: "Tidak memiliki izin mengelola Surat Edaran." }, { status: 403 });
+    }
+    await prisma.landingConfig.update({
+      where: { id: "default" },
+      data: {
+        suratEdaranVisible: false,
+        suratEdaranUrl: "",
+        suratEdaranStatus: "Dihapus",
+      },
+    });
+    await prisma.securityAuditLog.create({
+      data: {
+        actorName: session.fullName,
+        actorRole: session.role,
+        action: "DELETE_SURAT_EDARAN",
+        details: "Menghapus/menonaktifkan Surat Edaran di Landing Page",
+      },
+    }).catch(() => {});
     return NextResponse.json({ success: true });
   }
 

@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   const angkatan = sanitizeString(String(body.angkatan || "-"));
   const rawEmail = String(body.email || "").trim().toLowerCase();
   const rawPhone = String(body.phone || "").trim();
-  const role = ["SUPER_ADMIN", "ADMIN", "USER"].includes(body.role) ? body.role : "USER";
+  const role = ["SUPER_ADMIN", "ADMIN", "USER", "PENJAB_ROADSHOW"].includes(body.role) ? body.role : "USER";
   const permissions = body.permissions || {};
   const assignedSchoolId = body.assignedSchoolId || null;
 
@@ -197,7 +197,7 @@ export async function PUT(req: NextRequest) {
   const updateData: Record<string, any> = {};
   if (body.fullName !== undefined) updateData.fullName = sanitizeString(String(body.fullName));
   if (body.angkatan !== undefined) updateData.angkatan = sanitizeString(String(body.angkatan));
-  if (body.role !== undefined && ["SUPER_ADMIN", "ADMIN", "USER"].includes(body.role)) {
+  if (body.role !== undefined && ["SUPER_ADMIN", "ADMIN", "USER", "PENJAB_ROADSHOW"].includes(body.role)) {
     updateData.role = body.role;
   }
   if (body.permissions !== undefined) {
@@ -213,7 +213,7 @@ export async function PUT(req: NextRequest) {
     updateData.passwordHash = hashPassword(String(body.newPassword).trim());
   }
 
-  await prisma.userAccount.update({
+  const updatedUser = await prisma.userAccount.update({
     where: { id },
     data: updateData,
   });
@@ -222,8 +222,10 @@ export async function PUT(req: NextRequest) {
     data: {
       actorName: session.fullName,
       actorRole: session.role,
-      action: "UPDATE_USER_PERMISSIONS",
-      details: `Mengubah hak akses/penugasan akun ID ${id}`,
+      action: body.newPassword ? "RESET_PASSWORD_BY_SUPERADMIN" : "UPDATE_USER_PERMISSIONS",
+      details: body.newPassword
+        ? `Super Admin mereset password untuk akun: ${updatedUser.username}`
+        : `Mengubah hak akses/penugasan akun: ${updatedUser.username}`,
     },
   });
 

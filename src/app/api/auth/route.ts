@@ -201,25 +201,31 @@ export async function POST(req: NextRequest) {
 
       let phoneError: string | null = null;
       if (rawPhone) {
-        if (!/^08[1-9][0-9]{7,10}$/.test(rawPhone)) {
-          phoneError = "Nomor telepon harus diawali 08 / 628 dan terdiri dari 10-13 digit angka aktif.";
+        if (!rawPhone.startsWith("08")) {
+          phoneError = "Nomor WhatsApp wajib diawali '08'.";
+        } else if (rawPhone.length < 9 || rawPhone.length > 13) {
+          phoneError = "Nomor WhatsApp harus 9 - 13 digit angka.";
         } else {
-          const tail = rawPhone.slice(3);
+          const tail = rawPhone.slice(2);
           if (
-            /^(\d)\1{5,}$/.test(tail) ||
+            /^(\d)\1{4,}$/.test(tail) ||
             "0123456789012345".includes(tail) ||
             "9876543210987654".includes(tail)
           ) {
-            phoneError = "Terdeteksi pola nomor palsu/berulang! Gunakan nomor aktif asli.";
+            phoneError = "Terdeteksi pola nomor beruntun/berulang! Masukkan nomor WhatsApp asli.";
           }
         }
       }
 
       let emailError: string | null = null;
       if (rawEmail) {
-        const emailRegex = /^[a-zA-Z0-9._%+-]{3,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-        if (!emailRegex.test(rawEmail)) {
-          emailError = "Format email belum valid (contoh: nama@gmail.com).";
+        if (rawEmail.length > 50) {
+          emailError = "Alamat email maksimal 50 karakter.";
+        } else {
+          const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+          if (!emailRegex.test(rawEmail)) {
+            emailError = "Format email belum valid (contoh: nama@gmail.com).";
+          }
         }
       }
 
@@ -239,6 +245,200 @@ export async function POST(req: NextRequest) {
         emailError: null,
       });
     }
+  }
+
+  // =========================================================================
+  // ACTION: REGISTER (2-Step Registration with Real-Time Rules)
+  // =========================================================================
+  if (action === "register") {
+    const fullName = sanitizeString(String(body.fullName || "")).trim().slice(0, 50);
+    const angkatan = String(body.angkatan || "").trim();
+    const email = String(body.email || "").trim().toLowerCase().slice(0, 50);
+    const rawPhone = String(body.phone || "").trim().replace(/[^0-9]/g, "");
+    const phone = rawPhone.startsWith("628") ? `08${rawPhone.slice(3)}` : rawPhone;
+    const password = String(body.password || "");
+    const currentYear = new Date().getFullYear();
+
+    // 1. Validasi Nama Lengkap
+    if (!fullName || fullName.length < 2) {
+      return NextResponse.json({ error: "Nama lengkap wajib diisi minimal 2 huruf." }, { status: 400 });
+    }
+    if (fullName.length > 50) {
+      return NextResponse.json({ error: "Nama lengkap maksimal 50 huruf." }, { status: 400 });
+    }
+
+    // 2. Validasi Angkatan PPI
+    if (!/^\d{4}$/.test(angkatan)) {
+      return NextResponse.json({ error: "Angkatan PPI wajib berupa 4 digit angka tahun (contoh: 2024)." }, { status: 400 });
+    }
+    const angkatanNum = Number(angkatan);
+    if (angkatanNum > currentYear) {
+      return NextResponse.json(
+        { error: `Angkatan PPI tidak boleh melebihi tahun sekarang (${currentYear}).` },
+        { status: 400 }
+      );
+    }
+    if (angkatanNum < 1970) {
+      return NextResponse.json({ error: "Tahun angkatan PPI tidak valid." }, { status: 400 });
+    }
+
+    // 3. Validasi Email
+    if (!email) {
+      return NextResponse.json({ error: "Alamat email wajib diisi." }, { status: 400 });
+    }
+    if (email.length > 50) {
+      return NextResponse.json({ error: "Alamat email maksimal 50 karakter." }, { status: 400 });
+    }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ error: "Format email tidak valid (contoh: nama@gmail.com)." }, { status: 400 });
+    }
+
+    // 4. Validasi WhatsApp
+    if (!phone) {
+      return NextResponse.json({ error: "Nomor WhatsApp wajib diisi." }, { status: 400 });
+    }
+    if (!phone.startsWith("08")) {
+      return NextResponse.json({ error: "Nomor WhatsApp wajib diawali '08'." }, { status: 400 });
+    }
+    if (phone.length < 9 || phone.length > 13) {
+      return NextResponse.json({ error: "Nomor WhatsApp harus terdiri dari 9 hingga 13 digit angka." }, { status: 400 });
+    }
+    const phoneTail = phone.slice(2);
+    if (
+      /^(\d)\1{4,}$/.test(phoneTail) ||
+      "0123456789012345".includes(phoneTail) ||
+      "9876543210987654".includes(phoneTail)
+    ) {
+      return NextResponse.json(
+        { error: "Nomor WhatsApp tidak boleh berpola angka beruntun/berulang!" },
+        { status: 400 }
+      );
+    }
+
+    // 5. Validasi Password
+    if (password.length < 8) {
+      return NextResponse.json({ error: "Password minimal 8 karakter." }, { status: 400 });
+    }
+    if (!/[A-Z]/.test(password)) {
+      return NextResponse.json({ error: "Password wajib memiliki minimal 1 huruf besar (A-Z)." }, { status: 400 });
+    }
+    if (!/[a-z]/.test(password)) {
+      return NextResponse.json({ error: "Password wajib memiliki minimal 1 huruf kecil (a-z)." }, { status: 400 });
+    }
+    if (!/[0-9]/.test(password)) {
+      return NextResponse.json({ error: "Password wajib memiliki minimal 1 angka (0-9)." }, { status: 400 });
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(password)) {
+      return NextResponse.json({ error: "Password wajib memiliki minimal 1 karakter ikon unik / simbol (!@#$% dll.)." }, { status: 400 });
+    }
+
+    // 6. Cek Duplikat di Database
+    const [existingEmail, existingPhone] = await Promise.all([
+      prisma.userAccount.findFirst({ where: { email } }),
+      prisma.userAccount.findFirst({
+        where: {
+          OR: [{ phone }, { phone: phone.replace(/^0/, "62") }],
+        },
+      }),
+    ]);
+    if (existingEmail) {
+      return NextResponse.json(
+        { error: "Alamat email ini sudah terdaftar! Silakan login atau gunakan email lain." },
+        { status: 409 }
+      );
+    }
+    if (existingPhone) {
+      return NextResponse.json(
+        { error: "Nomor WhatsApp ini sudah terdaftar! Silakan login atau gunakan nomor lain." },
+        { status: 409 }
+      );
+    }
+
+    // 7. Auto-Generate Unique Username
+    let baseUsername = fullName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 16);
+    if (!baseUsername || baseUsername.length < 3) {
+      baseUsername = email.split("@")[0].replace(/[^a-z0-9]/g, "_").slice(0, 16);
+    }
+    let uniqueUsername = baseUsername;
+    let counter = 1;
+    while (await prisma.userAccount.findUnique({ where: { username: uniqueUsername } })) {
+      uniqueUsername = `${baseUsername.slice(0, 14)}_${counter}`;
+      counter++;
+    }
+
+    // 8. Simpan Akun Baru (Role: USER / Panitia PPI)
+    const passwordHash = hashPassword(password);
+    const defaultPermissions = {
+      inputBB: true,
+      inputTB: true,
+      inputRegistrasi: true,
+    };
+
+    const newUser = await prisma.userAccount.create({
+      data: {
+        username: uniqueUsername,
+        passwordHash,
+        fullName,
+        angkatan,
+        email,
+        phone,
+        role: "USER",
+        permissions: JSON.stringify(defaultPermissions),
+        isActive: true,
+      },
+    });
+
+    // 9. Login Otomatis via Session Cookie
+    const token = signSessionToken({
+      userId: newUser.id,
+      username: newUser.username,
+      email: newUser.email,
+      phone: newUser.phone,
+      fullName: newUser.fullName,
+      angkatan: newUser.angkatan,
+      role: newUser.role as any,
+      permissions: defaultPermissions,
+      assignedSchoolId: null,
+    });
+
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        userId: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        phone: newUser.phone,
+        fullName: newUser.fullName,
+        angkatan: newUser.angkatan,
+        role: newUser.role,
+        permissions: defaultPermissions,
+      },
+    });
+
+    response.cookies.set(SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 12 * 60 * 60,
+    });
+
+    await prisma.securityAuditLog.create({
+      data: {
+        actorName: fullName,
+        actorRole: "USER",
+        action: "REGISTER_NEW_ACCOUNT",
+        details: `Pendaftaran akun anggota PPI Akt. ${angkatan} berhasil`,
+        ipAddress: ip,
+      },
+    }).catch(() => {});
+
+    return response;
   }
 
   // =========================================================================

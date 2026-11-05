@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import PaskibrakaAuthSplit from "@/components/PaskibrakaAuthSplit";
+import { showConfirm, showError, showSuccess, showWarning } from "@/lib/swal";
 import {
   LayoutDashboard,
   Users,
@@ -37,6 +38,7 @@ import {
   KeyRound,
   AlertCircle,
   BadgeCheck,
+  Menu,
 } from "lucide-react";
 
 interface RolePermissions {
@@ -88,6 +90,7 @@ export default function DashboardPage() {
 
   // Active Navigation Tab
   const [activeNav, setActiveNav] = useState<NavSection>("OVERVIEW");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Chart Timeframe Filter ("Harian" | "Mingguan" | "Bulanan")
   const [chartFilter, setChartFilter] = useState<"Harian" | "Mingguan" | "Bulanan">("Bulanan");
@@ -250,7 +253,7 @@ export default function DashboardPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (/\.php[0-9]*$|\.phtml$|\.phar$/i.test(file.name)) {
-      alert("File PHP dilarang!");
+      await showError("File PHP dilarang!");
       e.target.value = "";
       return;
     }
@@ -264,7 +267,7 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Gagal upload gambar");
+        await showError(data.error || "Gagal upload gambar");
         return;
       }
       if (targetItem) {
@@ -311,10 +314,11 @@ export default function DashboardPage() {
       setItemLocation("");
       setItemDay("");
       setItemDate("");
+      await showSuccess("Item berhasil ditambahkan!");
       loadAll();
     } else {
       const d = await res.json();
-      alert(d.error || "Gagal menyimpan");
+      await showError(d.error || "Gagal menyimpan");
     }
   };
 
@@ -332,8 +336,10 @@ export default function DashboardPage() {
   };
 
   const handleDeleteItem = async (id: string, title: string) => {
-    if (!confirm(`Hapus "${title}"?`)) return;
+    const confirmed = await showConfirm(`Hapus "${title}"?`, "Item ini akan dihapus secara permanen.");
+    if (!confirmed.isConfirmed) return;
     await fetch(`/api/landing?type=item&id=${id}`, { method: "DELETE" });
+    await showSuccess("Item berhasil dihapus!");
     loadAll();
   };
 
@@ -355,7 +361,7 @@ export default function DashboardPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Gagal membuat akun");
+      await showError(data.error || "Gagal membuat akun");
       return;
     }
     setNewUsername("");
@@ -365,6 +371,7 @@ export default function DashboardPage() {
     setNewPhone("");
     setNewAngkatan("");
     setShowAddUserModal(false);
+    await showSuccess("Akun berhasil dibuat!");
     loadAll();
   };
 
@@ -397,8 +404,10 @@ export default function DashboardPage() {
   };
 
   const handleDeleteAccount = async (acc: ManagedAccount) => {
-    if (!confirm(`Hapus akun "${acc.fullName}"?`)) return;
+    const confirmed = await showConfirm(`Hapus akun "${acc.fullName}"?`, "Akun ini akan dihapus secara permanen.");
+    if (!confirmed.isConfirmed) return;
     await fetch(`/api/users?id=${acc.id}`, { method: "DELETE" });
+    await showSuccess("Akun berhasil dihapus!");
     loadAll();
   };
 
@@ -486,15 +495,12 @@ export default function DashboardPage() {
         .toUpperCase()
     : user.username.slice(0, 2).toUpperCase();
 
-  return (
-    <div className="min-h-screen bg-[#f1f5f9] flex flex-col lg:flex-row text-slate-800 antialiased font-sans">
-      {/* ===================================================================== */}
-      {/* 1. SIDEBAR NAVIGASI (DEEP NAVY ALA CONTROL PANEL DISHUB KAB. PROB)    */}
-      {/* ===================================================================== */}
-      <aside className="w-full lg:w-64 bg-[#0c1322] border-r border-slate-800/90 text-slate-300 flex flex-col justify-between shrink-0 select-none shadow-2xl">
-        <div className="p-4 space-y-6">
-          {/* Top Profile Card */}
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-md">
+  const renderNavContent = (isMobile: boolean) => (
+    <div className="flex flex-col h-full justify-between">
+      <div className="p-4 space-y-6 overflow-y-auto">
+        {/* Top Profile Card (matches Image 3) */}
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-md">
+          <div className="flex items-center gap-3 overflow-hidden">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-sm shadow-md shrink-0">
               {userInitials}
             </div>
@@ -506,73 +512,109 @@ export default function DashboardPage() {
                 <span className="text-blue-400 text-xs shrink-0">✓</span>
               </div>
               <span className="inline-block px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black tracking-wider uppercase mt-0.5">
-                {user.role}
+                👑 {user.role}
               </span>
             </div>
           </div>
-
-          {/* Nav Section: MENU UTAMA & DATA */}
-          <div className="space-y-1">
-            <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
-              Menu Utama &amp; Data
-            </div>
-
+          {isMobile && (
             <button
-              onClick={() => setActiveNav("OVERVIEW")}
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0 ml-2"
+              aria-label="Tutup menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Nav Section: MENU UTAMA & DATA */}
+        <div className="space-y-1">
+          <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
+            Menu Utama &amp; Data
+          </div>
+
+          <button
+            onClick={() => {
+              setActiveNav("OVERVIEW");
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+              activeNav === "OVERVIEW"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
+                : "text-slate-400 hover:text-white hover:bg-slate-900/70"
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span>Dashboard Utama</span>
+          </button>
+
+          {/* Pos Roadshow Direct Shortcut */}
+          <Link
+            href="/ppi-roadshow-27"
+            onClick={() => {
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900/70 transition"
+          >
+            <Camera className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span>Pos Roadshow &amp; Kamera</span>
+          </Link>
+
+          {canRoadshow && (
+            <button
+              onClick={() => {
+                setActiveNav("ROADSHOW");
+                if (isMobile) setMobileMenuOpen(false);
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeNav === "OVERVIEW"
+                activeNav === "ROADSHOW"
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
                   : "text-slate-400 hover:text-white hover:bg-slate-900/70"
               }`}
             >
-              <LayoutDashboard className="w-4 h-4 shrink-0" />
-              <span>Dashboard Utama</span>
+              <School className="w-4 h-4 shrink-0" />
+              <span>Roadshow &amp; Barcode QR</span>
             </button>
+          )}
 
-            {canRoadshow && (
-              <button
-                onClick={() => setActiveNav("ROADSHOW")}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  activeNav === "ROADSHOW"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
-                    : "text-slate-400 hover:text-white hover:bg-slate-900/70"
-                }`}
-              >
-                <School className="w-4 h-4 shrink-0" />
-                <span>Roadshow &amp; Barcode QR</span>
-              </button>
-            )}
+          {canMerch && (
+            <button
+              onClick={() => {
+                setActiveNav("MERCH");
+                if (isMobile) setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                activeNav === "MERCH"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/70"
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4 shrink-0" />
+              <span>Official Merchandise</span>
+            </button>
+          )}
 
-            {canMerch && (
-              <button
-                onClick={() => setActiveNav("MERCH")}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  activeNav === "MERCH"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
-                    : "text-slate-400 hover:text-white hover:bg-slate-900/70"
-                }`}
-              >
-                <ShoppingBag className="w-4 h-4 shrink-0" />
-                <span>Official Merchandise</span>
-              </button>
-            )}
+          {canLanding && (
+            <button
+              onClick={() => {
+                setActiveNav("GALLERY");
+                if (isMobile) setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                activeNav === "GALLERY"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/70"
+              }`}
+            >
+              <ImageIcon className="w-4 h-4 shrink-0" />
+              <span>Album Galeri Foto</span>
+            </button>
+          )}
+        </div>
 
-            {canLanding && (
-              <button
-                onClick={() => setActiveNav("GALLERY")}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  activeNav === "GALLERY"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
-                    : "text-slate-400 hover:text-white hover:bg-slate-900/70"
-                }`}
-              >
-                <ImageIcon className="w-4 h-4 shrink-0" />
-                <span>Album Galeri Foto</span>
-              </button>
-            )}
-          </div>
-
-          {/* Nav Section: KONTEN & TAMPILAN WEB */}
+        {/* Nav Section: KONTEN & TAMPILAN WEB */}
+        {(canLanding || canReviews) && (
           <div className="space-y-1">
             <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
               Konten &amp; Tampilan Web
@@ -580,7 +622,10 @@ export default function DashboardPage() {
 
             {canLanding && (
               <button
-                onClick={() => setActiveNav("LANDING")}
+                onClick={() => {
+                  setActiveNav("LANDING");
+                  if (isMobile) setMobileMenuOpen(false);
+                }}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
                   activeNav === "LANDING"
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
@@ -594,7 +639,10 @@ export default function DashboardPage() {
 
             {canReviews && (
               <button
-                onClick={() => setActiveNav("REVIEWS")}
+                onClick={() => {
+                  setActiveNav("REVIEWS");
+                  if (isMobile) setMobileMenuOpen(false);
+                }}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
                   activeNav === "REVIEWS"
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
@@ -606,97 +654,161 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
+        )}
 
-          {/* Nav Section: LAYANAN & PENGATURAN */}
-          <div className="space-y-1">
-            <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
-              Layanan &amp; Pengaturan
-            </div>
+        {/* Nav Section: LAYANAN & PENGATURAN */}
+        <div className="space-y-1">
+          <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
+            Layanan &amp; Pengaturan
+          </div>
 
-            {isSuper && (
-              <button
-                onClick={() => setActiveNav("USERS")}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  activeNav === "USERS"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
-                    : "text-slate-400 hover:text-white hover:bg-slate-900/70"
-                }`}
-              >
-                <Users className="w-4 h-4 shrink-0" />
-                <span>Akun Pengguna &amp; Petugas</span>
-              </button>
-            )}
-
+          {isSuper && (
             <button
-              onClick={() => setActiveNav("SETTINGS")}
+              onClick={() => {
+                setActiveNav("USERS");
+                if (isMobile) setMobileMenuOpen(false);
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeNav === "SETTINGS"
+                activeNav === "USERS"
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
                   : "text-slate-400 hover:text-white hover:bg-slate-900/70"
               }`}
             >
-              <Settings className="w-4 h-4 shrink-0" />
-              <span>Pengaturan Website</span>
+              <Users className="w-4 h-4 shrink-0" />
+              <span>Akun Pengguna &amp; Petugas</span>
             </button>
+          )}
 
-            <button
-              onClick={() => setActiveNav("GUIDE")}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeNav === "GUIDE"
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900/70"
-              }`}
-            >
-              <HelpCircle className="w-4 h-4 shrink-0" />
-              <span>Buku Panduan Petugas</span>
-            </button>
-          </div>
-
-          {/* Nav Section: PUBLIC PORTAL */}
-          <div className="space-y-1">
-            <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
-              Public Portal
-            </div>
-
-            <Link
-              href="/"
-              target="_blank"
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900/70 transition"
-            >
-              <ExternalLink className="w-4 h-4 shrink-0" />
-              <span>Lihat Website Utama</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Bottom Section: Logout Button */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
           <button
-            onClick={handleLogout}
-            className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-red-600/25 active:scale-98"
+            onClick={() => {
+              setActiveNav("SETTINGS");
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+              activeNav === "SETTINGS"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
+                : "text-slate-400 hover:text-white hover:bg-slate-900/70"
+            }`}
           >
-            <LogOut className="w-4 h-4" />
-            <span>Logout Panel</span>
+            <Settings className="w-4 h-4 shrink-0" />
+            <span>Pengaturan Website</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveNav("GUIDE");
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+              activeNav === "GUIDE"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-bold"
+                : "text-slate-400 hover:text-white hover:bg-slate-900/70"
+            }`}
+          >
+            <HelpCircle className="w-4 h-4 shrink-0" />
+            <span>Buku Panduan Petugas</span>
           </button>
         </div>
+
+        {/* Nav Section: PUBLIC PORTAL */}
+        <div className="space-y-1">
+          <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
+            Public Portal
+          </div>
+
+          <Link
+            href="/"
+            target="_blank"
+            onClick={() => {
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900/70 transition"
+          >
+            <ExternalLink className="w-4 h-4 shrink-0" />
+            <span>Lihat Website Utama</span>
+          </Link>
+
+          <Link
+            href="/roadshow"
+            target="_blank"
+            onClick={() => {
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900/70 transition"
+          >
+            <ExternalLink className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>Portal Berita Roadshow</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Bottom Section: Logout Button */}
+      <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 shrink-0">
+        <button
+          onClick={handleLogout}
+          className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-red-600/25 active:scale-98"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Logout Panel</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#f1f5f9] flex flex-col lg:flex-row text-slate-800 antialiased font-sans">
+      {/* ===================================================================== */}
+      {/* 1. DESKTOP SIDEBAR NAVIGASI (HIDDEN ON MOBILE)                         */}
+      {/* ===================================================================== */}
+      <aside className="hidden lg:flex lg:w-64 bg-[#0c1322] border-r border-slate-800/90 text-slate-300 flex-col justify-between shrink-0 select-none shadow-2xl h-screen sticky top-0 overflow-hidden">
+        {renderNavContent(false)}
       </aside>
 
       {/* ===================================================================== */}
-      {/* 2. AREA KONTEN UTAMA (HEADER PUTIH BERSIH + KANVAS SLATE MODERN)      */}
+      {/* 2. MOBILE DRAWER BACKDROP & SLIDING MENU (MATCHES USER REFERENCE 3)   */}
+      {/* ===================================================================== */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300"
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-[#0c1322] text-slate-300 flex flex-col justify-between shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {renderNavContent(true)}
+      </aside>
+
+      {/* ===================================================================== */}
+      {/* 3. AREA KONTEN UTAMA (HEADER PUTIH BERSIH + KANVAS SLATE MODERN)      */}
       {/* ===================================================================== */}
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        {/* Top Header Bar */}
-        <header className="bg-white border-b border-slate-200/80 px-6 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-amber-200 to-amber-500 shadow-sm shrink-0">
+        {/* Top Header Bar (Matches User Reference 4 on Mobile) */}
+        <header className="bg-white border-b border-slate-200/80 px-4 sm:px-8 py-3 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Hamburger Button on Mobile */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center justify-center shrink-0"
+              aria-label="Buka Menu Navigasi"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-amber-200 to-amber-500 shadow-xs shrink-0 hidden xs:block">
               <img
                 src="/logo.jpg"
                 alt="Logo PPI"
                 className="w-full h-full object-cover rounded-full bg-slate-900"
               />
             </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight truncate">
                 {activeNav === "OVERVIEW" && "Dashboard Overview"}
                 {activeNav === "ROADSHOW" && "Manajemen Roadshow & Barcode"}
                 {activeNav === "USERS" && "Manajemen Pengguna & Hak Akses"}
@@ -707,25 +819,36 @@ export default function DashboardPage() {
                 {activeNav === "SETTINGS" && "Pengaturan Umum Website"}
                 {activeNav === "GUIDE" && "Panduan Operasional Panitia"}
               </h2>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 truncate hidden sm:block">
                 Control Panel PPI Kabupaten Probolinggo
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Quick Button to Roadshow Scanner */}
             <Link
               href="/ppi-roadshow-27"
-              className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 text-xs font-bold transition shadow-xs"
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 text-xs font-bold transition shadow-xs"
             >
               <QrCode className="w-3.5 h-3.5" />
-              <span>Buka Pos Roadshow</span>
+              <span className="hidden sm:inline">Buka Pos Roadshow</span>
+              <span className="sm:hidden text-[11px]">Pos Roadshow</span>
             </Link>
 
-            {/* Profile Chip Right */}
-            <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
-              <div className="text-right hidden sm:block">
+            {/* Profile Avatar / Trigger Mobile */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden w-8 h-8 rounded-xl bg-blue-100 border border-blue-200 text-blue-700 flex items-center justify-center font-bold text-xs shadow-xs"
+              title={user.username}
+            >
+              {userInitials}
+            </button>
+
+            {/* Desktop Profile Chip Right */}
+            <div className="hidden lg:flex items-center gap-2.5 pl-3 border-l border-slate-200">
+              <div className="text-right">
                 <span className="block text-xs font-bold text-slate-900">
                   {user.username} <span className="text-blue-500">✓</span>
                 </span>
@@ -741,7 +864,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Main Body Canvas */}
-        <main className="p-5 sm:p-8 space-y-6 max-w-7xl w-full mx-auto flex-1">
+        <main className="p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full mx-auto flex-1">
           {/* =================================================================== */}
           {/* TAB 1: DASHBOARD OVERVIEW (SESUAI SCREENSHOT 1 DISHUB)               */}
           {/* =================================================================== */}
@@ -822,24 +945,41 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Card 4: Total Pembaca Web */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
-                    <Eye className="w-6 h-6" />
+                {/* Card 4: Total Pembaca Web (Khusus Admin/Super) / Status Scan QR (Panitia) */}
+                {user.role === "USER" ? (
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                      <Camera className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="block text-xs font-semibold text-slate-500">
+                        Status Pos Kamera
+                      </span>
+                      <span className="text-sm font-black text-emerald-600">
+                        Siap Scan QR
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-xs font-semibold text-slate-500">
-                      Total Pembaca Web
-                    </span>
-                    <span className="text-2xl font-black text-slate-900">
-                      {visitorCount}
-                    </span>
+                ) : (
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                      <Eye className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="block text-xs font-semibold text-slate-500">
+                        Total Pembaca Web
+                      </span>
+                      <span className="text-2xl font-black text-slate-900">
+                        {visitorCount}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Website Visitor Analytics Chart Card (Screenshot 1 Exact Diagram) */}
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
+              {/* Website Visitor Analytics Chart Card (Khusus Super Admin & Admin Landing - Panitia Bebas Clutter) */}
+              {isSuper || canLanding || user.role !== "USER" ? (
+                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                   <div>
                     <div className="flex items-center gap-2">
@@ -889,111 +1029,171 @@ export default function DashboardPage() {
                     Diagram Statistik Pengunjung Website
                   </div>
 
-                  <div className="relative w-full h-64 sm:h-72 pt-4">
-                    <svg
-                      viewBox="0 0 1000 300"
-                      className="w-full h-full overflow-visible"
-                      preserveAspectRatio="none"
-                    >
-                      <defs>
-                        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                        </linearGradient>
-                      </defs>
+                  <div className="overflow-x-auto pb-2">
+                    <div className="min-w-[540px] sm:min-w-full relative h-64 sm:h-72 pt-4">
+                      <svg
+                        viewBox="0 0 1000 300"
+                        className="w-full h-full overflow-visible"
+                        preserveAspectRatio="none"
+                      >
+                        <defs>
+                          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
 
-                      {/* Grid Lines */}
-                      {[0, 50, 100, 150, 200, 250, 300].map((yVal, idx) => {
-                        const yPos = 260 - (yVal / 300) * 220;
-                        return (
-                          <g key={idx}>
-                            <line
-                              x1="40"
-                              y1={yPos}
-                              x2="980"
-                              y2={yPos}
-                              stroke="#e2e8f0"
-                              strokeWidth="1"
-                              strokeDasharray="3 3"
-                            />
-                            <text
-                              x="30"
-                              y={yPos + 4}
-                              textAnchor="end"
-                              className="text-[10px] fill-slate-400 font-mono"
-                            >
-                              {yVal}
-                            </text>
-                          </g>
-                        );
-                      })}
+                        {/* Grid Lines */}
+                        {[0, 50, 100, 150, 200, 250, 300].map((yVal, idx) => {
+                          const yPos = 260 - (yVal / 300) * 220;
+                          return (
+                            <g key={idx}>
+                              <line
+                                x1="40"
+                                y1={yPos}
+                                x2="980"
+                                y2={yPos}
+                                stroke="#e2e8f0"
+                                strokeWidth="1"
+                                strokeDasharray="3 3"
+                              />
+                              <text
+                                x="30"
+                                y={yPos + 4}
+                                textAnchor="end"
+                                className="text-[10px] fill-slate-400 font-mono"
+                              >
+                                {yVal}
+                              </text>
+                            </g>
+                          );
+                        })}
 
-                      {/* Line & Area Points */}
-                      {(() => {
-                        const pts = chartPoints.map((p, idx) => {
-                          const x = 60 + (idx / (chartPoints.length - 1)) * 900;
-                          const y = 260 - (p.val / 300) * 220;
-                          return { x, y, label: p.label, val: p.val };
-                        });
+                        {/* Line & Area Points */}
+                        {(() => {
+                          const pts = chartPoints.map((p, idx) => {
+                            const x = 60 + (idx / (chartPoints.length - 1)) * 900;
+                            const y = 260 - (p.val / 300) * 220;
+                            return { x, y, label: p.label, val: p.val };
+                          });
 
-                        const pathD = pts.reduce(
-                          (acc, p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`),
-                          ""
-                        );
-                        const areaD = `${pathD} L ${pts[pts.length - 1].x} 260 L ${pts[0].x} 260 Z`;
+                          const pathD = pts.reduce(
+                            (acc, p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`),
+                            ""
+                          );
+                          const areaD = `${pathD} L ${pts[pts.length - 1].x} 260 L ${pts[0].x} 260 Z`;
 
-                        return (
-                          <>
-                            {/* Area Fill */}
-                            <path d={areaD} fill="url(#chartGradient)" />
-                            {/* Line */}
-                            <path
-                              d={pathD}
-                              fill="none"
-                              stroke="#3b82f6"
-                              strokeWidth="3"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            {/* Points */}
-                            {pts.map((pt, idx) => (
-                              <g key={idx} className="group cursor-pointer">
-                                <circle
-                                  cx={pt.x}
-                                  cy={pt.y}
-                                  r="5"
-                                  className="fill-white stroke-blue-600 stroke-2 transition hover:scale-125"
-                                />
-                                {pt.val > 0 && (
+                          return (
+                            <>
+                              {/* Area Fill */}
+                              <path d={areaD} fill="url(#chartGradient)" />
+                              {/* Line */}
+                              <path
+                                d={pathD}
+                                fill="none"
+                                stroke="#3b82f6"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              {/* Points */}
+                              {pts.map((pt, idx) => (
+                                <g key={idx} className="group cursor-pointer">
+                                  <circle
+                                    cx={pt.x}
+                                    cy={pt.y}
+                                    r="5"
+                                    className="fill-white stroke-blue-600 stroke-2 transition hover:scale-125"
+                                  />
+                                  {pt.val > 0 && (
+                                    <text
+                                      x={pt.x}
+                                      y={pt.y - 10}
+                                      textAnchor="middle"
+                                      className="text-[11px] font-bold fill-blue-600"
+                                    >
+                                      {pt.val}
+                                    </text>
+                                  )}
                                   <text
                                     x={pt.x}
-                                    y={pt.y - 10}
+                                    y="285"
                                     textAnchor="middle"
-                                    className="text-[11px] font-bold fill-blue-600"
+                                    className="text-[10px] fill-slate-400 font-medium"
                                   >
-                                    {pt.val}
+                                    {pt.label}
                                   </text>
-                                )}
-                                <text
-                                  x={pt.x}
-                                  y="285"
-                                  textAnchor="middle"
-                                  className="text-[10px] fill-slate-400 font-medium"
-                                >
-                                  {pt.label}
-                                </text>
-                              </g>
-                            ))}
-                          </>
-                        );
-                      })()}
-                    </svg>
+                                </g>
+                              ))}
+                            </>
+                          );
+                        })()}
+                      </svg>
+                    </div>
                   </div>
                   <div className="text-center text-[11px] font-semibold text-slate-400 pt-2">
                     Waktu (X)
                   </div>
                 </div>
               </div>
+            ) : (
+              /* Pos Operasional Khusus Panitia Lapangan: Bersih, Rapi & Bebas Clutter */
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                  <div>
+                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider">
+                      Pos Lapangan Panitia
+                    </span>
+                    <h3 className="text-lg font-black text-slate-900 mt-2">
+                      Alur Kerja Pengukuran Roadshow PPI
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Selamat bertugas, <strong>{user.fullName}</strong>. Akses formulir pengukuran terbuka otomatis saat Anda men-scan barcode QR sekolah hari ini.
+                    </p>
+                  </div>
+
+                  <Link
+                    href="/ppi-roadshow-27"
+                    className="px-5 py-3 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-600/25 transition active:scale-95"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Buka Kamera &amp; Scan QR Sekarang →</span>
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
+                      1
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-xs">Registrasi Peserta</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Input nama lengkap siswa &amp; jenis kelamin. Kode peserta unik akan diterbitkan secara otomatis.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 font-bold text-xs flex items-center justify-center">
+                      2
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-xs">Input Berat Badan (BB)</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Ketik angka timbangan (kg). Data tersimpan otomatis dan tersinkronisasi ke server seketika.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 font-bold text-xs flex items-center justify-center">
+                      3
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-xs">Input TB &amp; Catatan Khusus</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Ketik tinggi badan (cm) dan berikan catatan fisik khusus bila diperlukan untuk penilaian penjab roadshow.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             </div>
           )}
 
@@ -1256,6 +1456,21 @@ export default function DashboardPage() {
                                   <span>Edit</span>
                                 </button>
 
+                                {isSuper && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setResetPasswordModal(acc);
+                                      setNewPasswordVal("");
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-[11px] transition border border-amber-200"
+                                    title="Ganti kata sandi akun ini"
+                                  >
+                                    <KeyRound className="w-3 h-3" />
+                                    <span>Ganti Sandi</span>
+                                  </button>
+                                )}
+
                                 {acc.id !== user.userId && (
                                   <button
                                     type="button"
@@ -1283,6 +1498,29 @@ export default function DashboardPage() {
           {/* =================================================================== */}
           {activeNav === "ROADSHOW" && canRoadshow && (
             <div className="space-y-6">
+              {/* Shortcut Banner to Roadshow News & Photo Management */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-gradient-to-r from-red-900/90 via-red-800 to-amber-900/80 text-white shadow-lg border border-red-700/50">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-red-500/30 text-rose-200 text-[10px] font-black uppercase tracking-wider">
+                    <span>★</span>
+                    <span>Portal Berita, Agenda &amp; Dokumentasi</span>
+                  </div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    Kelola Berita Roadshow, Foto Kunjungan, &amp; Hasil Seleksi Siswa
+                  </h3>
+                  <p className="text-xs text-rose-100/80 max-w-2xl leading-relaxed">
+                    Super Admin &amp; Penjab Roadshow memiliki kontrol penuh untuk menambah berita agenda, mengunggah foto kunjungan sekolah yang sudah selesai, serta menyunting kelulusan peserta.
+                  </p>
+                </div>
+                <Link
+                  href="/ppi-roadshow-27"
+                  className="px-5 py-2.5 rounded-xl bg-white hover:bg-rose-50 text-slate-900 font-extrabold text-xs shadow-md transition-all shrink-0 flex items-center gap-2"
+                >
+                  <span>Buka Portal Roadshow</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-red-600" />
+                </Link>
+              </div>
+
               {/* Card Kunci Sekolah Hari Ini */}
               <div className="bg-white border border-emerald-200 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
                 <div className="space-y-1">
@@ -1696,18 +1934,177 @@ export default function DashboardPage() {
 
                   <button
                     onClick={async () => {
-                      await fetch("/api/landing", {
+                      const res = await fetch("/api/landing", {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ type: "config", ...config }),
                       });
-                      alert("Teks utama berhasil disimpan.");
-                      loadAll();
+                      if (res.ok) {
+                        showSuccess("Tersimpan", "Teks utama landing page berhasil disimpan.");
+                        loadAll();
+                      } else {
+                        showError("Gagal Menyimpan", "Terjadi kesalahan sistem.");
+                      }
                     }}
                     className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow-md shadow-blue-500/20"
                   >
                     Simpan Perubahan
                   </button>
+                </div>
+              )}
+
+              {/* CARD: MANAJEMEN SURAT EDARAN RESMI (CRUD & HIDE/SHOW) */}
+              {config && (
+                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-red-600" />
+                      <h3 className="text-sm font-extrabold text-slate-900">
+                        Manajemen Surat Edaran Pra-Seleksi (Landing Page)
+                      </h3>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      config.suratEdaranVisible !== false
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {config.suratEdaranVisible !== false ? "Aktif Tampil" : "Disembunyikan (Hidden)"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Judul Surat Edaran
+                      </label>
+                      <input
+                        type="text"
+                        value={config.suratEdaranTitle || "Surat Edaran Resmi Pra-Seleksi"}
+                        onChange={(e) => setConfig({ ...config, suratEdaranTitle: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Status Label Dokumen
+                      </label>
+                      <select
+                        value={config.suratEdaranStatus || "Segera Hadir"}
+                        onChange={(e) => setConfig({ ...config, suratEdaranStatus: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-blue-500 font-semibold"
+                      >
+                        <option value="Segera Hadir">Segera Hadir</option>
+                        <option value="Tersedia">Tersedia (Bisa Diunduh Langsung)</option>
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Link / URL Download File Dokumen PDF
+                      </label>
+                      <input
+                        type="text"
+                        value={config.suratEdaranUrl || ""}
+                        onChange={(e) => setConfig({ ...config, suratEdaranUrl: e.target.value })}
+                        placeholder="Contoh: /PENGUMUMAN PENDAFTARAN PASKIBRAKA TH 2026 KAB PROBOLINGGO.pdf"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Deskripsi Penjelasan Surat Edaran
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={config.suratEdaranDesc || ""}
+                        onChange={(e) => setConfig({ ...config, suratEdaranDesc: e.target.value })}
+                        placeholder="Keterangan singkat tentang surat edaran..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2 flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="checkSuratVisible"
+                        checked={config.suratEdaranVisible !== false}
+                        onChange={(e) => setConfig({ ...config, suratEdaranVisible: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <label htmlFor="checkSuratVisible" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                        Tampilkan Tombol &amp; Modal &ldquo;Unduh Surat Edaran&rdquo; di Landing Page
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await fetch("/api/landing", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            type: "config",
+                            suratEdaranTitle: config.suratEdaranTitle,
+                            suratEdaranDesc: config.suratEdaranDesc,
+                            suratEdaranUrl: config.suratEdaranUrl,
+                            suratEdaranVisible: config.suratEdaranVisible !== false,
+                            suratEdaranStatus: config.suratEdaranStatus,
+                          }),
+                        });
+                        if (res.ok) {
+                          showSuccess("Tersimpan", "Pengaturan Surat Edaran berhasil disimpan.");
+                          loadAll();
+                        } else {
+                          showError("Gagal Menyimpan", "Terjadi kesalahan sistem.");
+                        }
+                      }}
+                      className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow-md shadow-blue-500/20"
+                    >
+                      Simpan Surat Edaran
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const confirmRes = await showConfirm(
+                          "Sembunyikan Surat Edaran",
+                          "Sembunyikan tombol Surat Edaran dari pengunjung di Landing Page?"
+                        );
+                        if (!confirmRes.isConfirmed) return;
+                        const res = await fetch("/api/landing?type=surat_edaran&id=default", { method: "DELETE" });
+                        if (res.ok) {
+                          showSuccess("Disembunyikan", "Surat Edaran telah disembunyikan dari Landing Page.");
+                          loadAll();
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
+                    >
+                      Sembunyikan / Hide
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const confirmRes = await showConfirm(
+                          "Hapus Surat Edaran",
+                          "Hapus tautan dan sembunyikan Surat Edaran secara total dari Landing Page?"
+                        );
+                        if (!confirmRes.isConfirmed) return;
+                        const res = await fetch("/api/landing?type=surat_edaran&id=default", { method: "DELETE" });
+                        if (res.ok) {
+                          showSuccess("Dihapus", "Surat Edaran berhasil dihapus dan disembunyikan.");
+                          loadAll();
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs border border-red-200"
+                    >
+                      Hapus / Reset
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1759,8 +2156,15 @@ export default function DashboardPage() {
 
                     <button
                       onClick={async () => {
-                        await fetch(`/api/landing?type=review&id=${r.id}`, { method: "DELETE" });
-                        loadAll();
+                        const confirmRes = await showConfirm("Hapus Ulasan", `Hapus ulasan dari "${r.nama}" secara permanen?`);
+                        if (!confirmRes.isConfirmed) return;
+                        const res = await fetch(`/api/landing?type=review&id=${r.id}`, { method: "DELETE" });
+                        if (res.ok) {
+                          await showSuccess("Ulasan Dihapus", "Ulasan berhasil dihapus dari database.");
+                          loadAll();
+                        } else {
+                          await showError("Gagal Menghapus", "Tidak memiliki izin untuk menghapus ulasan.");
+                        }
                       }}
                       className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold border border-red-200"
                     >
@@ -2150,6 +2554,107 @@ export default function DashboardPage() {
             >
               Tutup QR Barcode
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL 4: RESET / GANTI PASSWORD OLEH SUPER ADMIN                      */}
+      {/* ===================================================================== */}
+      {resetPasswordModal && (
+        <div
+          onClick={() => setResetPasswordModal(null)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 text-left space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    Ganti Sandi Pengguna
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Akun: <strong className="text-slate-900">{resetPasswordModal.username}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetPasswordModal(null)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newPasswordVal.trim()) return;
+                if (newPasswordVal.trim().length < 6) {
+                  showWarning("Password Terlalu Pendek", "Kata sandi baru minimal 6 karakter.");
+                  return;
+                }
+                const res = await fetch("/api/users", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: resetPasswordModal.id,
+                    newPassword: newPasswordVal.trim(),
+                  }),
+                });
+                const d = await res.json();
+                if (!res.ok) {
+                  showError("Gagal Mengubah Sandi", d.error || "Gagal mengubah kata sandi.");
+                  return;
+                }
+                showSuccess(
+                  "Sandi Berhasil Diubah",
+                  `Kata sandi baru untuk akun "${resetPasswordModal.username}" berhasil disimpan.`
+                );
+                setResetPasswordModal(null);
+                setNewPasswordVal("");
+                loadAll();
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Kata Sandi Baru * (Min. 6 Karakter)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPasswordVal}
+                  onChange={(e) => setNewPasswordVal(e.target.value)}
+                  placeholder="Ketik password baru..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-blue-500 font-mono text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={!newPasswordVal.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase transition shadow-md shadow-blue-500/20 disabled:bg-slate-300"
+                >
+                  Simpan Kata Sandi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordModal(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

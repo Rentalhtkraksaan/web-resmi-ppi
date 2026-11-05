@@ -5,6 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import PaskibrakaAuthSplit from "@/components/PaskibrakaAuthSplit";
+import { showConfirm, showError, showSuccess, showWarning } from "@/lib/swal";
 
 interface RoadshowSchool {
   id: string;
@@ -40,6 +41,23 @@ interface AuthUser {
   role: "SUPER_ADMIN" | "ADMIN" | "USER";
 }
 
+interface RoadshowPost {
+  id: string;
+  title: string;
+  category: string;
+  status: "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI";
+  schoolId?: string;
+  schoolName: string;
+  location: string;
+  date: string;
+  imageUrl: string;
+  summary: string;
+  content: string;
+  sortOrder: number;
+  isPublished: boolean;
+  author: string;
+}
+
 export default function PpiRoadshow27Page() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -55,8 +73,25 @@ export default function PpiRoadshow27Page() {
   const [qrVerified, setQrVerified] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Active Filter Tab inside unlocked workspace: ALL_TABLES (BB & TB) | REGISTRASI | ADMIN_PANEL
-  const [activeTab, setActiveTab] = useState<"ALL_TABLES" | "REGISTRASI" | "ADMIN_PANEL">("ALL_TABLES");
+  // Active Filter Tab inside unlocked workspace: ALL_TABLES (BB & TB) | REGISTRASI | ADMIN_PANEL | POSTS_PANEL
+  const [activeTab, setActiveTab] = useState<"ALL_TABLES" | "REGISTRASI" | "ADMIN_PANEL" | "POSTS_PANEL">("ALL_TABLES");
+
+  // Roadshow Posts (Berita & Agenda Kunjungan) State
+  const [posts, setPosts] = useState<RoadshowPost[]>([]);
+  const [postsFilter, setPostsFilter] = useState<"ALL" | "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI">("ALL");
+  const [postModalOpen, setPostModalOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<RoadshowPost | null>(null);
+  const [postFormTitle, setPostFormTitle] = useState("");
+  const [postFormStatus, setPostFormStatus] = useState<"SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI">("SUDAH_DIKUNJUNGI");
+  const [postFormCategory, setPostFormCategory] = useState("Kunjungan Selesai");
+  const [postFormSchool, setPostFormSchool] = useState("");
+  const [postFormLocation, setPostFormLocation] = useState("");
+  const [postFormDate, setPostFormDate] = useState("");
+  const [postFormImage, setPostFormImage] = useState("");
+  const [postFormSummary, setPostFormSummary] = useState("");
+  const [postFormContent, setPostFormContent] = useState("");
+  const [postFormSaving, setPostFormSaving] = useState(false);
+  const [uploadingPostImg, setUploadingPostImg] = useState(false);
 
   // Super Admin QR Modal State
   const [qrModalSchool, setQrModalSchool] = useState<RoadshowSchool | null>(null);
@@ -117,8 +152,187 @@ export default function PpiRoadshow27Page() {
           setActiveTab(adminAccess ? "ADMIN_PANEL" : "ALL_TABLES");
         }
       }
+
+      // Load Roadshow Posts
+      try {
+        const postsRes = await fetch("/api/roadshow?mode=posts", { cache: "no-store" });
+        if (postsRes.ok) {
+          const pData = await postsRes.json();
+          setPosts(pData.posts || []);
+        }
+      } catch {}
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  const loadPosts = async () => {
+    try {
+      const postsRes = await fetch("/api/roadshow?mode=posts", { cache: "no-store" });
+      if (postsRes.ok) {
+        const pData = await postsRes.json();
+        setPosts(pData.posts || []);
+      }
+    } catch {}
+  };
+
+  const openCreatePostModal = () => {
+    setEditingPost(null);
+    setPostFormTitle("");
+    setPostFormStatus("SUDAH_DIKUNJUNGI");
+    setPostFormCategory("Kunjungan Selesai");
+    setPostFormSchool(activeSchool?.namaSekolah || "");
+    setPostFormLocation(activeSchool?.lokasi || "Kabupaten Probolinggo");
+    setPostFormDate(
+      new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }).toUpperCase()
+    );
+    setPostFormImage("");
+    setPostFormSummary("");
+    setPostFormContent("");
+    setPostModalOpen(true);
+  };
+
+  const openEditPostModal = (p: RoadshowPost) => {
+    setEditingPost(p);
+    setPostFormTitle(p.title);
+    setPostFormStatus(p.status);
+    setPostFormCategory(p.category);
+    setPostFormSchool(p.schoolName);
+    setPostFormLocation(p.location);
+    setPostFormDate(p.date);
+    setPostFormImage(p.imageUrl);
+    setPostFormSummary(p.summary);
+    setPostFormContent(p.content);
+    setPostModalOpen(true);
+  };
+
+  const handleUploadPostPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showWarning("Ukuran File Terlalu Besar", "Maksimal ukuran foto adalah 5 MB.");
+      return;
+    }
+    setUploadingPostImg(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setPostFormImage(data.url);
+        showSuccess("Foto Terunggah", "Foto berita berhasil diunggah.");
+      } else {
+        showError("Gagal Upload", data.error || "Gagal mengunggah foto.");
+      }
+    } catch {
+      showError("Gangguan Jaringan", "Gagal mengunggah foto.");
+    } finally {
+      setUploadingPostImg(false);
+    }
+  };
+
+  const handleSavePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postFormTitle.trim()) {
+      showWarning("Judul Wajib Diisi", "Silakan masukkan judul berita.");
+      return;
+    }
+    setPostFormSaving(true);
+    try {
+      const isEdit = Boolean(editingPost);
+      const res = await fetch("/api/roadshow", {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: isEdit ? "update_post" : "create_post",
+          id: editingPost?.id,
+          title: postFormTitle.trim(),
+          status: postFormStatus,
+          category: postFormCategory,
+          schoolName: postFormSchool.trim(),
+          location: postFormLocation.trim(),
+          date: postFormDate.trim(),
+          imageUrl: postFormStatus === "SUDAH_DIKUNJUNGI" ? postFormImage.trim() : "",
+          summary: postFormSummary.trim(),
+          content: postFormContent.trim(),
+          isPublished: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError("Gagal Menyimpan", data.error || "Gagal menyimpan berita.");
+        return;
+      }
+      setPostModalOpen(false);
+      showSuccess(
+        "Berita Tersimpan",
+        `Berita "${postFormTitle}" berhasil ${isEdit ? "diperbarui" : "diterbitkan"}!`
+      );
+      loadPosts();
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
+    } finally {
+      setPostFormSaving(false);
+    }
+  };
+
+  const handleTogglePostStatus = async (p: RoadshowPost) => {
+    const nextStatus = p.status === "SUDAH_DIKUNJUNGI" ? "AKAN_DIKUNJUNGI" : "SUDAH_DIKUNJUNGI";
+    const statusLabel = nextStatus === "SUDAH_DIKUNJUNGI" ? "Sudah Dikunjungi" : "Akan Dikunjungi";
+    const confirmRes = await showConfirm(
+      "Ubah Status Kunjungan",
+      `Ubah status "${p.title}" menjadi "${statusLabel}"?`
+    );
+    if (!confirmRes.isConfirmed) return;
+
+    try {
+      const res = await fetch("/api/roadshow", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_post",
+          id: p.id,
+          status: nextStatus,
+          title: p.title,
+          category: p.category,
+          schoolName: p.schoolName,
+          location: p.location,
+          date: p.date,
+          imageUrl: nextStatus === "AKAN_DIKUNJUNGI" ? "" : p.imageUrl,
+          summary: p.summary,
+          content: p.content,
+          isPublished: p.isPublished,
+        }),
+      });
+      if (res.ok) {
+        showSuccess("Status Diperbarui", `Status berita diubah menjadi "${statusLabel}".`);
+        loadPosts();
+      } else {
+        showError("Gagal", "Gagal memperbarui status berita.");
+      }
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
+    }
+  };
+
+  const handleDeletePost = async (p: RoadshowPost) => {
+    const confirmRes = await showConfirm(
+      "Hapus Berita Roadshow",
+      `Hapus berita "${p.title}" secara permanen?`
+    );
+    if (!confirmRes.isConfirmed) return;
+
+    try {
+      const res = await fetch(`/api/roadshow?type=post&id=${p.id}`, { method: "DELETE" });
+      if (res.ok) {
+        showSuccess("Berita Dihapus", "Berita berhasil dihapus.");
+        setPosts((prev) => prev.filter((x) => x.id !== p.id));
+      } else {
+        showError("Gagal", "Gagal menghapus berita.");
+      }
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
     }
   };
 
@@ -536,12 +750,20 @@ export default function PpiRoadshow27Page() {
                 Panitia: <strong className="text-zinc-200">{user.fullName}</strong> (PPI Akt. {user.angkatan})
               </p>
             </div>
-            <button
-              onClick={handleLogoutClick}
-              className="px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-red-400 hover:bg-zinc-800 shrink-0"
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href="/dashboard"
+                className="px-3 sm:px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm"
+              >
+                <span>← Kembali ke Dashboard</span>
+              </Link>
+              <button
+                onClick={handleLogoutClick}
+                className="px-3 sm:px-3.5 py-2 rounded-xl bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 text-xs font-semibold text-red-400 hover:text-red-300 transition"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 
@@ -738,14 +960,12 @@ export default function PpiRoadshow27Page() {
             >
               Hasil Publik
             </Link>
-            {user.role === "SUPER_ADMIN" && (
-              <Link
-                href="/dashboard"
-                className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white"
-              >
-                Dashboard
-              </Link>
-            )}
+            <Link
+              href="/dashboard"
+              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-white flex items-center gap-1.5 transition shadow-sm"
+            >
+              <span>← Kembali ke Dashboard</span>
+            </Link>
             <button
               onClick={handleLogoutClick}
               className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-xs transition"
@@ -907,6 +1127,22 @@ export default function PpiRoadshow27Page() {
                 }`}
               >
                 Panel Kelulusan &amp; Tayang
+              </button>
+            )}
+
+            {isAdminRoadshow && (
+              <button
+                onClick={() => {
+                  setActiveTab("POSTS_PANEL");
+                  loadPosts();
+                }}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                  activeTab === "POSTS_PANEL"
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/30"
+                    : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <span>📰 Kelola Berita Roadshow ({posts.length})</span>
               </button>
             )}
           </div>
@@ -1286,6 +1522,176 @@ export default function PpiRoadshow27Page() {
             </div>
           </div>
         )}
+
+        {/* =================================================================== */}
+        {/* TAB 4: KELOLA BERITA & AGENDA KUNJUNGAN ROADSHOW (PENJAB ROADSHOW) */}
+        {/* =================================================================== */}
+        {activeTab === "POSTS_PANEL" && isAdminRoadshow && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-6 space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <h3 className="text-sm sm:text-base font-bold text-white">
+                    Kelola Berita &amp; Agenda Kunjungan Roadshow
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Atur publikasi berita sekolah yang <strong>Sudah Dikunjungi</strong> atau rilis agenda yang <strong>Akan Dikunjungi</strong> untuk ditampilkan di portal publik.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openCreatePostModal}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/25 flex items-center gap-2"
+                >
+                  <span>+</span>
+                  <span>Tulis Berita / Agenda Baru</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPostsFilter("ALL")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  postsFilter === "ALL"
+                    ? "bg-white text-black"
+                    : "bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800"
+                }`}
+              >
+                Semua Berita ({posts.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPostsFilter("SUDAH_DIKUNJUNGI")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  postsFilter === "SUDAH_DIKUNJUNGI"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-zinc-950 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/60"
+                }`}
+              >
+                <span>✓ Sudah Dikunjungi</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
+                  {posts.filter((p) => p.status === "SUDAH_DIKUNJUNGI").length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPostsFilter("AKAN_DIKUNJUNGI")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  postsFilter === "AKAN_DIKUNJUNGI"
+                    ? "bg-sky-600 text-white"
+                    : "bg-zinc-950 text-sky-400 hover:bg-sky-950/40 border border-sky-900/60"
+                }`}
+              >
+                <span>⏳ Akan Dikunjungi</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
+                  {posts.filter((p) => p.status === "AKAN_DIKUNJUNGI").length}
+                </span>
+              </button>
+            </div>
+
+            {/* Posts Grid */}
+            {posts.filter((p) => postsFilter === "ALL" || p.status === postsFilter).length === 0 ? (
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-8 text-center text-xs text-zinc-500">
+                Belum ada berita atau agenda pada filter ini. Klik &quot;+ Tulis Berita / Agenda Baru&quot; untuk menambahkan.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {posts
+                  .filter((p) => postsFilter === "ALL" || p.status === postsFilter)
+                  .map((post) => {
+                    const isSudah = post.status === "SUDAH_DIKUNJUNGI";
+                    return (
+                      <div
+                        key={post.id}
+                        className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="relative aspect-[16/9] bg-zinc-900 overflow-hidden">
+                            <img
+                              src={
+                                post.imageUrl ||
+                                "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=1000"
+                              }
+                              alt={post.title}
+                              className="w-full h-full object-cover"
+                            />
+                            <span
+                              className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                isSudah
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-sky-600 text-white"
+                              }`}
+                            >
+                              {isSudah ? "✓ Sudah Dikunjungi" : "⏳ Akan Dikunjungi"}
+                            </span>
+                            <span className="absolute bottom-0 left-0 px-3 py-1 bg-black/70 text-zinc-200 text-[10px] font-mono font-bold">
+                              {post.date || "AGUSTUS 2026"}
+                            </span>
+                          </div>
+
+                          <div className="p-4 space-y-2">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                              <span className="text-emerald-400 font-semibold">{post.category}</span>
+                              <span className="truncate max-w-[120px]">{post.location}</span>
+                            </div>
+
+                            <h4 className="font-bold text-white text-sm line-clamp-2 leading-snug">
+                              {post.title}
+                            </h4>
+
+                            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                              {post.summary || post.content}
+                            </p>
+
+                            <div className="text-[11px] text-zinc-500 pt-1">
+                              🏫 {post.schoolName || "Sekolah Mitra"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-zinc-900/60 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePostStatus(post)}
+                            className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold"
+                            title="Ubah antara Sudah Dikunjungi dan Akan Dikunjungi"
+                          >
+                            Status ⇄
+                          </button>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openEditPostModal(post)}
+                              className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 hover:bg-blue-500/30 text-xs font-semibold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePost(post)}
+                              className="px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 text-xs font-semibold"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* ===================================================================== */}
@@ -1417,6 +1823,227 @@ export default function PpiRoadshow27Page() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL BUAT / EDIT BERITA & AGENDA KUNJUNGAN ROADSHOW                   */}
+      {/* ===================================================================== */}
+      {postModalOpen && (
+        <div
+          onClick={() => !postFormSaving && setPostModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border border-zinc-700 rounded-3xl max-w-xl w-full p-6 sm:p-7 space-y-4 shadow-2xl my-auto text-left"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase">
+                  CMS Penjab Roadshow
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                  {editingPost ? "Edit Berita / Agenda Roadshow" : "Tulis Berita / Agenda Kunjungan Baru"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPostModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePost} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-zinc-300 font-semibold mb-1">
+                  Judul Berita / Rilis Agenda *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={postFormTitle}
+                  onChange={(e) => setPostFormTitle(e.target.value)}
+                  placeholder="Contoh: Sosialisasi Pra-Seleksi Paskibraka di SMKN 1 Kraksaan Rampung"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:border-red-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Status Kunjungan *
+                  </label>
+                  <select
+                    value={postFormStatus}
+                    onChange={(e) => setPostFormStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-bold focus:border-red-500 focus:outline-none"
+                  >
+                    <option value="SUDAH_DIKUNJUNGI">🟢 Sudah Dikunjungi</option>
+                    <option value="AKAN_DIKUNJUNGI">🔵 Akan Dikunjungi (Jadwal/Agenda)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Kategori / Topik
+                  </label>
+                  <input
+                    type="text"
+                    value={postFormCategory}
+                    onChange={(e) => setPostFormCategory(e.target.value)}
+                    placeholder="Contoh: Kunjungan Selesai, Agenda Resmi"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Nama Sekolah
+                  </label>
+                  <input
+                    type="text"
+                    value={postFormSchool}
+                    onChange={(e) => setPostFormSchool(e.target.value)}
+                    placeholder="Contoh: SMKN 1 KRAKSAAN"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Lokasi Kunjungan
+                  </label>
+                  <input
+                    type="text"
+                    value={postFormLocation}
+                    onChange={(e) => setPostFormLocation(e.target.value)}
+                    placeholder="Contoh: Kraksaan, Kab. Probolinggo"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-zinc-300 font-semibold mb-1">
+                  Tanggal Berita / Kunjungan (Persis Tampilan Diskominfo)
+                </label>
+                <input
+                  type="text"
+                  value={postFormDate}
+                  onChange={(e) => setPostFormDate(e.target.value)}
+                  placeholder="Contoh: 04 AGUSTUS 2026"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:border-red-500 focus:outline-none"
+                />
+              </div>
+
+              {postFormStatus === "AKAN_DIKUNJUNGI" ? (
+                <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs flex items-start gap-2.5">
+                  <span className="text-lg leading-none">ℹ️</span>
+                  <div className="space-y-0.5">
+                    <span className="font-bold block text-sky-200">
+                      Status: Akan Dikunjungi (Agenda Kalender)
+                    </span>
+                    <p className="text-[11px] text-sky-300/90 leading-relaxed">
+                      Sesuai ketentuan, sekolah yang belum dikunjungi tidak memerlukan foto dokumentasi lapangan. Halaman publik akan otomatis menampilkan kartu agenda resmi dengan tanggal kunjungan tanpa foto.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Upload Foto Dokumentasi Lapangan <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadPostPhoto}
+                      disabled={uploadingPostImg}
+                      className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer"
+                    />
+                    {uploadingPostImg && (
+                      <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
+                        Mengunggah gambar ke server...
+                      </span>
+                    )}
+                    {postFormImage ? (
+                      <div className="relative rounded-xl overflow-hidden border border-zinc-700 max-h-40 bg-black">
+                        <img
+                          src={postFormImage}
+                          alt="Preview Foto Berita"
+                          className="w-full h-36 object-cover"
+                        />
+                        <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-bold">
+                            ✓ Terpasang
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setPostFormImage("")}
+                            className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold shadow transition-colors"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-zinc-500 italic">
+                        Belum ada foto dokumentasi lapangan. Silakan unggah foto kegiatan.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-zinc-300 font-semibold mb-1">
+                  Ringkasan Berita (Untuk Tampilan Card)
+                </label>
+                <textarea
+                  rows={2}
+                  value={postFormSummary}
+                  onChange={(e) => setPostFormSummary(e.target.value)}
+                  placeholder="Ringkasan singkat 2-3 kalimat mengenai kegiatan ini..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:border-red-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-300 font-semibold mb-1">
+                  Isi Berita Lengkap
+                </label>
+                <textarea
+                  rows={4}
+                  value={postFormContent}
+                  onChange={(e) => setPostFormContent(e.target.value)}
+                  placeholder="Tuliskan laporan narasi lengkap kegiatan roadshow di sini..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:border-red-500 focus:outline-none leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="submit"
+                  disabled={postFormSaving || uploadingPostImg}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/30"
+                >
+                  {postFormSaving ? "Menyimpan..." : "✓ Simpan & Publikasikan"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPostModalOpen(false)}
+                  className="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

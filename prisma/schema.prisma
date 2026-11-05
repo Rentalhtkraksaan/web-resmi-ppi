@@ -42,18 +42,23 @@ model SecurityAuditLog {
 }
 
 model LandingConfig {
-  id             String   @id @default("default")
-  heroTitle      String   @default("GENERASI EMAS INDONESIA")
-  heroSubtitle   String   @default("Purna Paskibraka Indonesia Kabupaten Probolinggo. Membangun Karakter Kedisiplinan, Kepemimpinan, dan Jiwa Nasionalisme Pemuda Masa Depan.")
-  heroCtaText    String   @default("Visit Profile BPIP")
-  heroCtaUrl     String   @default("https://paskibraka.bpip.go.id/dashboard")
-  waAdminMerch   String   @default("6282228368042")
-  bukberTitle    String   @default("BUKBER PPI KAB. PROBOLINGGO 2026")
-  bukberDesc     String   @default("Ingatkah saat kita berpanas di bawah terik yang sama? Kini, saatnya kita duduk melingkar dalam sejuknya kekeluargaan. Bukan sekadar tentang menu berbuka, tapi tentang cerita yang takkan pernah usai.")
-  bukberDate     String   @default("Sabtu, 28 Feb 2026 | 16:00 WIB - Selesai")
-  bukberLocation String   @default("SMKN 2 Kraksaan")
-  bukberHtm      String   @default("Rp 30.000")
-  updatedAt      DateTime @updatedAt
+  id                 String   @id @default("default")
+  heroTitle          String   @default("GENERASI EMAS INDONESIA")
+  heroSubtitle       String   @default("Purna Paskibraka Indonesia Kabupaten Probolinggo. Membangun Karakter Kedisiplinan, Kepemimpinan, dan Jiwa Nasionalisme Pemuda Masa Depan.")
+  heroCtaText        String   @default("Visit Profile BPIP")
+  heroCtaUrl         String   @default("https://paskibraka.bpip.go.id/dashboard")
+  waAdminMerch       String   @default("6282228368042")
+  bukberTitle        String   @default("BUKBER PPI KAB. PROBOLINGGO 2026")
+  bukberDesc         String   @default("Ingatkah saat kita berpanas di bawah terik yang sama? Kini, saatnya kita duduk melingkar dalam sejuknya kekeluargaan. Bukan sekadar tentang menu berbuka, tapi tentang cerita yang takkan pernah usai.")
+  bukberDate         String   @default("Sabtu, 28 Feb 2026 | 16:00 WIB - Selesai")
+  bukberLocation     String   @default("SMKN 2 Kraksaan")
+  bukberHtm          String   @default("Rp 30.000")
+  suratEdaranTitle   String   @default("Surat Edaran Resmi Pra-Seleksi")
+  suratEdaranDesc    String   @default("Surat Edaran resmi pra-seleksi Roadshow Paskibraka Kabupaten Probolinggo.")
+  suratEdaranUrl     String   @default("/surat-edaran-roadshow.pdf")
+  suratEdaranVisible Boolean  @default(true)
+  suratEdaranStatus  String   @default("Segera Hadir")
+  updatedAt          DateTime @updatedAt
 }
 
 model LandingItem {
@@ -85,22 +90,29 @@ model Review {
 }
 
 model RoadshowSchool {
-  id              String              @id @default(cuid())
-  firebaseKey     String?             @unique
-  namaSekolah     String
-  lokasi          String              @default("Kab. Probolinggo")
-  tanggal         String              @default("-")
-  statusPenilaian String              @default("Dibuka") // Dibuka | Ditutup
-  minBeratCewek   Float               @default(45)
-  maxBeratCewek   Float               @default(60)
-  minTinggiCewek  Float               @default(155)
-  maxTinggiCewek  Float               @default(170)
-  minBeratCowok   Float               @default(55)
-  maxBeratCowok   Float               @default(75)
-  minTinggiCowok  Float               @default(165)
-  maxTinggiCowok  Float               @default(180)
-  createdAt       DateTime            @default(now())
-  candidates      RoadshowCandidate[]
+  id                    String              @id @default(cuid())
+  firebaseKey           String?             @unique
+  namaSekolah           String
+  lokasi                String              @default("Kab. Probolinggo")
+  tanggal               String              @default("-")
+  statusPenilaian       String              @default("Dibuka") // Dibuka | Ditutup
+  minBeratCewek         Float               @default(45)
+  maxBeratCewek         Float               @default(60)
+  minTinggiCewek        Float               @default(155)
+  maxTinggiCewek        Float               @default(170)
+  minBeratCowok         Float               @default(55)
+  maxBeratCowok         Float               @default(75)
+  minTinggiCowok        Float               @default(165)
+  maxTinggiCowok        Float               @default(180)
+  sortOrder             Int                 @default(0)
+  isActiveToday         Boolean             @default(false)
+  documentationPhoto    String              @default("")
+  documentationTitle    String              @default("")
+  documentationDate     String              @default("")
+  documentationLocation String              @default("")
+  closedAt              DateTime?
+  createdAt             DateTime            @default(now())
+  candidates            RoadshowCandidate[]
 }
 
 model RoadshowCandidate {
@@ -119,5 +131,24 @@ model RoadshowCandidate {
   updatedBy    String         @default("System")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+}
+
+model RoadshowPost {
+  id          String   @id @default(cuid())
+  title       String
+  category    String   @default("Kunjungan Sekolah") // Kunjungan Sekolah | Sosialisasi | Pra-Seleksi | Evaluasi
+  status      String   @default("SUDAH_DIKUNJUNGI")  // SUDAH_DIKUNJUNGI | AKAN_DIKUNJUNGI
+  schoolId    String?
+  schoolName  String   @default("")
+  location    String   @default("Kab. Probolinggo")
+  date        String   // e.g. "04 AGUSTUS 2026"
+  imageUrl    String   @default("")
+  summary     String   @default("")
+  content     String   @default("")
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  author      String   @default("Penjab Roadshow")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 

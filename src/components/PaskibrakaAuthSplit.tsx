@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { showSuccess, showError } from "@/lib/swal";
 
 interface PaskibrakaAuthSplitProps {
   initialMode?: "LOGIN" | "REGISTER";
@@ -46,11 +47,12 @@ export default function PaskibrakaAuthSplit({
   const [captchaRotating, setCaptchaRotating] = useState(false);
   const [captchaLoading, setCaptchaLoading] = useState(true);
 
-  // Register Form States (Tanpa Pilih Role!)
+  // Register Form States (2-Step Registration with strict validations)
+  const [regStep, setRegStep] = useState<1 | 2>(1);
   const [regFullName, setRegFullName] = useState("");
   const [regUsername, setRegUsername] = useState("");
   const [regPhone, setRegPhone] = useState("");
-  const [regAngkatan, setRegAngkatan] = useState("2025");
+  const [regAngkatan, setRegAngkatan] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
@@ -66,6 +68,50 @@ export default function PaskibrakaAuthSplit({
     phoneError?: string | null;
     emailError?: string | null;
   }>({ checking: false });
+
+  // Validation Calculations
+  const currentYear = new Date().getFullYear();
+
+  // Step 1 Validations
+  const isFullNameValid = regFullName.trim().length >= 2 && regFullName.length <= 50;
+  const isAngkatanNumeric = /^\d{4}$/.test(regAngkatan);
+  const angkatanNum = Number(regAngkatan);
+  const isAngkatanValid = isAngkatanNumeric && angkatanNum >= 1970 && angkatanNum <= currentYear;
+  const isAngkatanFuture = isAngkatanNumeric && angkatanNum > currentYear;
+  const isStep1Valid = isFullNameValid && isAngkatanValid;
+
+  // Step 2 Validations
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  const isEmailFormatValid = Boolean(regEmail && regEmail.length <= 50 && emailRegex.test(regEmail));
+  const isEmailClean = isEmailFormatValid && !dupStatus.emailTaken && !dupStatus.emailError;
+
+  const cleanPhone = regPhone.replace(/[^0-9]/g, "");
+  const isPhone08 = cleanPhone.startsWith("08");
+  const isPhoneLenValid = cleanPhone.length >= 9 && cleanPhone.length <= 13;
+  const phoneTail = cleanPhone.slice(2);
+  const isPhoneRepeating = Boolean(
+    cleanPhone.length >= 6 &&
+      (/^(\d)\1{4,}$/.test(phoneTail) ||
+        "0123456789012345".includes(phoneTail) ||
+        "9876543210987654".includes(phoneTail))
+  );
+  const isPhoneClean =
+    isPhone08 &&
+    isPhoneLenValid &&
+    !isPhoneRepeating &&
+    !dupStatus.phoneTaken &&
+    !dupStatus.phoneError;
+
+  // Password validation: 8+ chars, upper, lower, number, unique icon/symbol
+  const pwdHasMinLen = regPassword.length >= 8;
+  const pwdHasUpper = /[A-Z]/.test(regPassword);
+  const pwdHasLower = /[a-z]/.test(regPassword);
+  const pwdHasNumber = /[0-9]/.test(regPassword);
+  const pwdHasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(regPassword);
+  const isPasswordValid = pwdHasMinLen && pwdHasUpper && pwdHasLower && pwdHasNumber && pwdHasSymbol;
+
+  const isCaptchaFilled = captchaInput.trim().length >= 4;
+  const isStep2Valid = isEmailClean && isPhoneClean && isPasswordValid && isCaptchaFilled && !dupStatus.checking;
 
   // Modal Forgot Password
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -230,10 +276,35 @@ export default function PaskibrakaAuthSplit({
     }
   };
 
-  // Handle Register Submit
+  // Handle Register Submit (2-Step Registration)
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError(null);
+
+    if (!isStep1Valid) {
+      setRegStep(1);
+      setRegError("Data Step 1 belum valid. Periksa Nama Lengkap (maks. 50 huruf) dan Angkatan PPI.");
+      return;
+    }
+
+    if (!isEmailClean) {
+      setRegError(dupStatus.emailError || (dupStatus.emailTaken ? "Email ini sudah terdaftar!" : "Format email belum valid."));
+      return;
+    }
+
+    if (!isPhoneClean) {
+      if (!isPhone08) setRegError("Nomor WhatsApp wajib diawali '08'.");
+      else if (!isPhoneLenValid) setRegError("Nomor WhatsApp harus terdiri dari 9 hingga 13 digit angka.");
+      else if (isPhoneRepeating) setRegError("Nomor WhatsApp tidak boleh berpola angka beruntun/berulang!");
+      else if (dupStatus.phoneTaken) setRegError("Nomor WhatsApp ini sudah terdaftar!");
+      else setRegError(dupStatus.phoneError || "Nomor WhatsApp belum valid.");
+      return;
+    }
+
+    if (!isPasswordValid) {
+      setRegError("Password harus minimal 8 karakter, mengandung huruf besar, huruf kecil, angka, dan ikon unik.");
+      return;
+    }
 
     const cleanInput = captchaInput.trim().toUpperCase();
     if (!cleanInput) {
@@ -245,29 +316,8 @@ export default function PaskibrakaAuthSplit({
     // Client-side quick check
     if (captchaCode && cleanInput !== captchaCode.toUpperCase()) {
       setCaptchaError(true);
-      setRegError("Kode verifikasi (Captcha) salah! Silakan coba lagi.");
+      setRegError("Kode verifikasi (Captcha) salah! Silakan periksa kembali huruf & angka.");
       refreshCaptcha();
-      return;
-    }
-
-    if (dupStatus.emailTaken) {
-      setRegError("Email sudah terdaftar. Silakan login atau gunakan email lain.");
-      return;
-    }
-    if (dupStatus.phoneTaken) {
-      setRegError("Nomor telepon sudah terdaftar. Gunakan nomor WhatsApp asli Anda.");
-      return;
-    }
-    if (dupStatus.usernameTaken) {
-      setRegError("Username sudah digunakan. Silakan pilih username lain.");
-      return;
-    }
-    if (dupStatus.phoneError) {
-      setRegError(dupStatus.phoneError);
-      return;
-    }
-    if (dupStatus.emailError) {
-      setRegError(dupStatus.emailError);
       return;
     }
 
@@ -279,12 +329,11 @@ export default function PaskibrakaAuthSplit({
         body: JSON.stringify({
           action: "register",
           fullName: regFullName.trim(),
-          username: regUsername.trim(),
-          phone: regPhone.trim(),
           angkatan: regAngkatan.trim(),
-          email: regEmail.trim(),
+          email: regEmail.trim().toLowerCase(),
+          phone: cleanPhone,
           password: regPassword,
-          captchaInput: captchaInput.trim().toUpperCase(),
+          captchaInput: cleanInput,
           captchaToken,
         }),
       });
@@ -296,14 +345,18 @@ export default function PaskibrakaAuthSplit({
         return;
       }
 
+      await showSuccess(
+        "Pendaftaran Berhasil!",
+        `Selamat datang, ${data.user.fullName}! Akun anggota PPI Akt. ${data.user.angkatan} berhasil didaftarkan.`
+      );
+
       if (onSuccess) {
         onSuccess();
       } else {
-        router.push(redirectUrl);
-        router.refresh();
+        window.location.href = redirectUrl;
       }
     } catch {
-      setRegError("Terjadi gangguan saat mendaftar. Silakan coba lagi.");
+      setRegError("Terjadi gangguan jaringan saat mendaftar. Silakan coba lagi.");
       refreshCaptcha();
     } finally {
       setRegBusy(false);
@@ -316,7 +369,7 @@ export default function PaskibrakaAuthSplit({
       {/* PANEL KIRI: ALA-ALA PASKIBRAKA / PPI KABUPATEN PROBOLINGGO            */}
       {/* (GRADIENT MERAH MARUN/CRIMSON, LOGO PPI, NARRATIF RESMI, DEKORATIF)  */}
       {/* ===================================================================== */}
-      <div className="w-full lg:w-[38%] min-h-[360px] lg:min-h-screen bg-gradient-to-br from-[#800000] via-[#9e0b1c] to-[#580009] text-white flex flex-col items-center justify-center p-6 sm:p-10 lg:p-12 relative overflow-hidden shrink-0 shadow-2xl">
+      <div className="w-full lg:w-[38%] min-h-[220px] sm:min-h-[280px] lg:min-h-screen bg-gradient-to-br from-[#800000] via-[#9e0b1c] to-[#580009] text-white flex flex-col items-center justify-center p-5 sm:p-10 lg:p-12 relative overflow-hidden shrink-0 shadow-2xl">
         {/* Subtle Decorative Background Circles & Rings ala Govt Modern */}
         <div className="absolute -top-20 -left-20 w-80 h-80 rounded-full border border-white/10 pointer-events-none" />
         <div className="absolute -top-10 -left-10 w-96 h-96 rounded-full border border-white/5 pointer-events-none" />
@@ -331,10 +384,10 @@ export default function PaskibrakaAuthSplit({
         />
 
         {/* Center Content: Logo & Title Resmi (Clean, Minimalist, Centered) */}
-        <div className="relative z-10 my-auto py-10 lg:py-0 flex flex-col items-center justify-center text-center max-w-sm mx-auto">
+        <div className="relative z-10 my-auto py-6 lg:py-0 flex flex-col items-center justify-center text-center max-w-sm mx-auto">
           {/* Logo PPI Official with Gold & White Ring */}
-          <div className="relative mb-6 flex flex-col items-center">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1.5 bg-gradient-to-tr from-amber-400 via-white to-amber-300 shadow-2xl shadow-black/40 flex items-center justify-center">
+          <div className="relative mb-4 sm:mb-6 flex flex-col items-center">
+            <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full p-1.5 bg-gradient-to-tr from-amber-400 via-white to-amber-300 shadow-2xl shadow-black/40 flex items-center justify-center">
               <img
                 src="/logo.jpg"
                 alt="Logo Purna Paskibraka Indonesia"
@@ -347,27 +400,27 @@ export default function PaskibrakaAuthSplit({
           </div>
 
           {/* Heading Resmi PPI */}
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight text-center">
+          <h1 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight text-center">
             Purna Paskibraka Indonesia
           </h1>
-          <p className="text-base sm:text-lg font-bold text-amber-300 mt-1 text-center">
+          <p className="text-sm sm:text-lg font-bold text-amber-300 mt-1 text-center">
             Kabupaten Probolinggo
           </p>
 
-          <div className="w-16 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 rounded-full my-4 mx-auto" />
+          <div className="w-16 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 rounded-full my-3 sm:my-4 mx-auto" />
         </div>
       </div>
 
       {/* ===================================================================== */}
       {/* PANEL KANAN: FORM LOGIN & DAFTAR (CLEAN ALA DISHUB, LIGHT & MODERN)  */}
       {/* ===================================================================== */}
-      <div className="w-full lg:w-[62%] min-h-screen flex flex-col justify-between p-6 sm:p-10 lg:p-14 relative bg-[#f8fafc]">
+      <div className="w-full lg:w-[62%] min-h-screen flex flex-col justify-between p-4 sm:p-8 lg:p-14 relative bg-[#f8fafc] overflow-hidden">
         {/* Soft Decorative Ambient Top-Right Blob */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-red-100/60 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         <div className="absolute bottom-0 right-10 w-72 h-72 bg-amber-100/50 rounded-full blur-3xl pointer-events-none" />
 
         {/* Center Main Card Form */}
-        <div className="max-w-md w-full mx-auto my-auto relative z-10 bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-xl shadow-slate-200/50">
+        <div className="max-w-md w-full mx-auto my-auto relative z-10 bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-8 shadow-xl shadow-slate-200/50">
           {authMode === "LOGIN" ? (
             /* =============================================================== */
             /* MODE 1: LOGIN ADMIN / PANITIA (SESUAI DOKUMEN DISHUB)           */
@@ -610,10 +663,10 @@ export default function PaskibrakaAuthSplit({
                 </div>
 
                 {/* Action Buttons ala Dishub: Kembali & Masuk */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
+                <div className="grid grid-cols-2 gap-3 pt-3">
                   <Link
                     href="/"
-                    className="w-full py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm text-center transition flex items-center justify-center gap-1.5"
+                    className="w-full py-2.5 px-3 sm:px-4 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm text-center transition flex items-center justify-center gap-1.5"
                   >
                     <span>← Kembali</span>
                   </Link>
@@ -621,7 +674,7 @@ export default function PaskibrakaAuthSplit({
                   <button
                     type="submit"
                     disabled={loginBusy}
-                    className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/30 active:scale-95 disabled:bg-slate-400"
+                    className="w-full py-2.5 px-3 sm:px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/30 active:scale-95 disabled:bg-slate-400"
                   >
                     {loginBusy ? (
                       <span>Memproses...</span>
@@ -632,6 +685,19 @@ export default function PaskibrakaAuthSplit({
                       </>
                     )}
                   </button>
+                </div>
+
+                {/* Switch to Register via /sign-in */}
+                <div className="text-center pt-4 border-t border-slate-100">
+                  <p className="text-xs text-slate-500">
+                    Belum memiliki akun PPI?{" "}
+                    <Link
+                      href="/sign-in"
+                      className="text-red-600 hover:text-red-700 font-bold hover:underline"
+                    >
+                      Daftar Akun Baru →
+                    </Link>
+                  </p>
                 </div>
               </form>
             </>
@@ -645,7 +711,7 @@ export default function PaskibrakaAuthSplit({
                   Pendaftaran Akun PPI
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Registrasi akun anggota &amp; pengurus PPI Kabupaten Probolinggo
+                  Registrasi resmi anggota &amp; panitia PPI Kabupaten Probolinggo
                 </p>
               </div>
 
@@ -656,199 +722,361 @@ export default function PaskibrakaAuthSplit({
                 </div>
               )}
 
-              <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left text-xs sm:text-sm">
-                {/* 1. Nama Lengkap */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nama Lengkap <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={regFullName}
-                    onChange={(e) => setRegFullName(e.target.value)}
-                    placeholder="Contoh: Aditya Pratama"
-                    className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
-                  />
-                </div>
-
-                {/* 2. Username (max 20 char) */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-slate-700">
-                      Username (Maks 20 Karakter) <span className="text-red-600">*</span>
-                    </label>
-                    <span className="text-[10px] text-slate-400">{regUsername.length}/20</span>
+              {/* STEP 1: IDENTITAS ANGGOTA PPI */}
+              {regStep === 1 && (
+                <div className="space-y-4 text-left">
+                  {/* Stepper Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-red-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
+                        1
+                      </span>
+                      <span className="text-xs font-bold text-slate-800">
+                        Step 1: Identitas Keanggotaan
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      Step 1 dari 2
+                    </span>
                   </div>
-                  <input
-                    type="text"
-                    required
-                    maxLength={20}
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                    placeholder="username_anda"
-                    className={`w-full px-3.5 py-2 rounded-xl bg-white border text-slate-900 focus:outline-none ${
-                      dupStatus.usernameTaken
-                        ? "border-red-500 ring-2 ring-red-100"
-                        : "border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-100"
-                    }`}
-                  />
-                  {dupStatus.usernameTaken && (
-                    <p className="text-[11px] text-red-600 mt-1 font-semibold">Username sudah digunakan orang lain.</p>
-                  )}
-                </div>
 
-                {/* 3. No. HP WhatsApp */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nomor WhatsApp / HP Aktif <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="08xxxxxxxxxx"
-                    className={`w-full px-3.5 py-2 rounded-xl bg-white border text-slate-900 focus:outline-none ${
-                      dupStatus.phoneTaken || dupStatus.phoneError
-                        ? "border-red-500 ring-2 ring-red-100"
-                        : "border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-100"
-                    }`}
-                  />
-                  {dupStatus.phoneTaken && (
-                    <p className="text-[11px] text-red-600 mt-1 font-semibold">Nomor ini sudah terdaftar!</p>
-                  )}
-                  {dupStatus.phoneError && (
-                    <p className="text-[11px] text-amber-600 mt-1 font-semibold">{dupStatus.phoneError}</p>
-                  )}
-                </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-red-600 h-full w-1/2 transition-all duration-300" />
+                  </div>
 
-                {/* 4. Angkatan PPI */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Angkatan PPI <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={regAngkatan}
-                    onChange={(e) => setRegAngkatan(e.target.value)}
-                    placeholder="Contoh: 2024 atau 2025"
-                    className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
-                  />
-                </div>
-
-                {/* 5. Email */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Alamat Email Aktif <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="nama@gmail.com"
-                    className={`w-full px-3.5 py-2 rounded-xl bg-white border text-slate-900 focus:outline-none ${
-                      dupStatus.emailTaken || dupStatus.emailError
-                        ? "border-red-500 ring-2 ring-red-100"
-                        : "border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-100"
-                    }`}
-                  />
-                  {dupStatus.emailTaken && (
-                    <p className="text-[11px] text-red-600 mt-1 font-semibold">Email ini sudah terdaftar!</p>
-                  )}
-                  {dupStatus.emailError && (
-                    <p className="text-[11px] text-amber-600 mt-1 font-semibold">{dupStatus.emailError}</p>
-                  )}
-                </div>
-
-                {/* 6. Password */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Password (Min. 6 Karakter) <span className="text-red-600">*</span>
-                  </label>
-                  <div className="relative flex items-center">
+                  {/* Field 1: Nama Lengkap (Maks 50 Huruf) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        Nama Lengkap <span className="text-red-600">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {regFullName.length}/50
+                      </span>
+                    </div>
                     <input
-                      type={showRegPassword ? "text" : "password"}
+                      type="text"
                       required
-                      minLength={6}
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Password baru"
-                      className="w-full pr-10 px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                      maxLength={50}
+                      value={regFullName}
+                      onChange={(e) => setRegFullName(e.target.value.slice(0, 50))}
+                      placeholder="Masukkan nama lengkap Anda..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100 transition shadow-sm"
                     />
+                    {regFullName.length >= 50 && (
+                      <p className="text-[11px] text-red-600 mt-1 font-semibold">
+                        Nama lengkap maksimal 50 huruf.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Field 2: Angkatan PPI (Wajib 4 Angka, Maks Tahun Sekarang) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        Angkatan PPI (Tahun) <span className="text-red-600">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Maks. Tahun {currentYear}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      maxLength={4}
+                      value={regAngkatan}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
+                        setRegAngkatan(val);
+                      }}
+                      placeholder={`Contoh: 2024 atau ${currentYear}`}
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border font-mono text-xs sm:text-sm text-slate-900 focus:outline-none transition shadow-sm ${
+                        isAngkatanFuture
+                          ? "border-red-500 ring-2 ring-red-100 text-red-600"
+                          : "border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                      }`}
+                    />
+
+                    {isAngkatanFuture && (
+                      <div className="mt-1.5 p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-[11px] font-semibold flex items-center gap-1.5">
+                        <span>⛔</span>
+                        <span>
+                          Angkatan PPI tidak boleh melebihi tahun sekarang (maksimal {currentYear}).
+                        </span>
+                      </div>
+                    )}
+
+                    {regAngkatan.length > 0 && regAngkatan.length < 4 && (
+                      <p className="text-[11px] text-amber-600 mt-1 font-semibold">
+                        Wajib berupa 4 digit angka tahun (contoh: 2024 atau {currentYear}).
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Navigasi Step 1 */}
+                  <div className="grid grid-cols-2 gap-3 pt-3">
+                    <Link
+                      href="/login"
+                      className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition text-center flex items-center justify-center"
+                    >
+                      ← Ke Login
+                    </Link>
+
                     <button
                       type="button"
-                      onClick={() => setShowRegPassword(!showRegPassword)}
-                      className="absolute right-3 text-slate-400 hover:text-slate-600 p-1"
+                      disabled={!isStep1Valid}
+                      onClick={() => {
+                        setRegError(null);
+                        setRegStep(2);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs transition shadow-md shadow-red-600/30 flex items-center justify-center gap-1.5"
                     >
-                      {showRegPassword ? "👁️" : "🙈"}
+                      <span>Lanjut Step 2</span>
+                      <span>→</span>
                     </button>
                   </div>
                 </div>
+              )}
 
-                {/* 7. Captcha */}
-                <div className="pt-1">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="flex-1 bg-slate-100 border border-slate-300 rounded-xl px-3 py-1.5 flex items-center justify-center gap-2 select-none h-10">
-                      {captchaLoading || !captchaCode ? (
-                        <div className="flex items-center gap-2 text-slate-500 text-xs">
-                          <span className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                          <span>Memuat captcha...</span>
-                        </div>
-                      ) : (
-                        captchaCode.split("").map((ch, idx) => (
-                          <span
-                            key={idx}
-                            style={{ color: CAPTCHA_COLORS[idx % CAPTCHA_COLORS.length] }}
-                            className="font-black text-base font-mono"
-                          >
-                            {ch}
-                          </span>
-                        ))
-                      )}
+              {/* STEP 2: KONTAK & PASSWORD (PENGECEKAN REALTIME) */}
+              {regStep === 2 && (
+                <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left text-xs sm:text-sm">
+                  {/* Stepper Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
+                        ✓
+                      </span>
+                      <span className="text-xs font-bold text-slate-800">
+                        Step 2: Kontak &amp; Password
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      Step 2 dari 2
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-600 h-full w-full transition-all duration-300" />
+                  </div>
+
+                  {/* Summary of Step 1 */}
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <div className="min-w-0 pr-2">
+                      <span className="text-[10px] text-slate-400 block font-semibold uppercase">
+                        Calon Anggota Terdata:
+                      </span>
+                      <strong className="text-slate-800 font-bold truncate block">
+                        {regFullName}
+                      </strong>
+                      <span className="text-slate-500 text-[11px]">
+                        PPI Angkatan {regAngkatan}
+                      </span>
                     </div>
                     <button
                       type="button"
-                      disabled={captchaLoading || captchaRotating}
-                      onClick={refreshCaptcha}
-                      className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-600 transition disabled:opacity-60"
-                      title="Ganti Captcha"
+                      onClick={() => setRegStep(1)}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-[11px] font-bold shrink-0 transition"
                     >
-                      🔄
+                      Ubah Step 1
                     </button>
                   </div>
-                  <input
-                    type="text"
-                    required
-                    disabled={captchaLoading}
-                    maxLength={5}
-                    value={captchaInput}
-                    onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
-                    placeholder={captchaLoading ? "MEMUAT KODE..." : "MASUKKAN KODE CAPTCHA"}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-center font-mono font-bold uppercase tracking-wider text-xs focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
-                  />
-                </div>
 
-                {/* Submit Register */}
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <Link
-                    href="/login"
-                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition text-center flex items-center justify-center"
-                  >
-                    ← Ke Login
-                  </Link>
+                  {/* Field 1: Email (Maks 50 huruf, live check) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        Alamat Email Aktif <span className="text-red-600">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {regEmail.length}/50
+                      </span>
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      maxLength={50}
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value.slice(0, 50))}
+                      placeholder="nama@gmail.com"
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-slate-900 focus:outline-none transition shadow-sm ${
+                        dupStatus.emailTaken || (regEmail.length > 0 && !isEmailFormatValid)
+                          ? "border-red-500 ring-2 ring-red-100"
+                          : "border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                      }`}
+                    />
+                    {dupStatus.emailTaken && (
+                      <p className="text-[11px] text-red-600 mt-1 font-semibold">
+                        Email ini sudah terdaftar! Gunakan email lain atau login.
+                      </p>
+                    )}
+                    {regEmail.length > 0 && !isEmailFormatValid && !dupStatus.emailTaken && (
+                      <p className="text-[11px] text-amber-600 mt-1 font-semibold">
+                        Format email belum valid (contoh: nama@gmail.com, maks. 50 huruf).
+                      </p>
+                    )}
+                  </div>
 
-                  <button
-                    type="submit"
-                    disabled={regBusy || dupStatus.checking}
-                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition shadow-md shadow-red-600/30 disabled:bg-slate-400"
-                  >
-                    {regBusy ? "Mendaftarkan..." : "Daftar Akun →"}
-                  </button>
-                </div>
-              </form>
+                  {/* Field 2: WhatsApp (Min 9, Max 13, prefix 08, dilarang beruntun) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        Nomor WhatsApp <span className="text-red-600">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {cleanPhone.length}/13 digit (Min. 9 digit, awal 08)
+                      </span>
+                    </div>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={13}
+                      value={regPhone}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 13);
+                        setRegPhone(digits);
+                      }}
+                      placeholder="Contoh: 081234567890"
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border font-mono text-slate-900 focus:outline-none transition shadow-sm ${
+                        (regPhone.length > 0 && (!isPhone08 || !isPhoneLenValid || isPhoneRepeating)) || dupStatus.phoneTaken
+                          ? "border-red-500 ring-2 ring-red-100"
+                          : "border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                      }`}
+                    />
+                    {regPhone.length > 0 && !isPhone08 && (
+                      <p className="text-[11px] text-red-600 mt-1 font-semibold">
+                        Nomor WhatsApp wajib diawali &apos;08&apos;.
+                      </p>
+                    )}
+                    {isPhoneRepeating && (
+                      <p className="text-[11px] text-red-600 mt-1 font-semibold">
+                        Dilarang menggunakan pola nomor angka beruntun/berulang!
+                      </p>
+                    )}
+                    {regPhone.length > 0 && isPhone08 && !isPhoneLenValid && !isPhoneRepeating && (
+                      <p className="text-[11px] text-amber-600 mt-1 font-semibold">
+                        Panjang nomor WhatsApp minimal 9 digit dan maksimal 13 digit.
+                      </p>
+                    )}
+                    {dupStatus.phoneTaken && (
+                      <p className="text-[11px] text-red-600 mt-1 font-semibold">
+                        Nomor WhatsApp ini sudah terdaftar!
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Field 3: Password (Realtime checklist) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        Password Akun <span className="text-red-600">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold"
+                      >
+                        {showRegPassword ? "Sembunyikan" : "Tampilkan"}
+                      </button>
+                    </div>
+                    <input
+                      type={showRegPassword ? "text" : "password"}
+                      required
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Buat password kombinasi yang kuat..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100 transition shadow-sm"
+                    />
+
+                    {/* Realtime Password Checklist Visual Badges */}
+                    <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-1.5 text-[11px]">
+                      <span className={`flex items-center gap-1 font-semibold ${pwdHasMinLen ? "text-emerald-600" : "text-slate-400"}`}>
+                        <span>{pwdHasMinLen ? "✓" : "○"}</span>
+                        <span>Min. 8 Karakter</span>
+                      </span>
+                      <span className={`flex items-center gap-1 font-semibold ${pwdHasUpper ? "text-emerald-600" : "text-slate-400"}`}>
+                        <span>{pwdHasUpper ? "✓" : "○"}</span>
+                        <span>Huruf Besar (A-Z)</span>
+                      </span>
+                      <span className={`flex items-center gap-1 font-semibold ${pwdHasLower ? "text-emerald-600" : "text-slate-400"}`}>
+                        <span>{pwdHasLower ? "✓" : "○"}</span>
+                        <span>Huruf Kecil (a-z)</span>
+                      </span>
+                      <span className={`flex items-center gap-1 font-semibold ${pwdHasNumber ? "text-emerald-600" : "text-slate-400"}`}>
+                        <span>{pwdHasNumber ? "✓" : "○"}</span>
+                        <span>Angka (0-9)</span>
+                      </span>
+                      <span className={`col-span-2 flex items-center gap-1 font-semibold ${pwdHasSymbol ? "text-emerald-600" : "text-slate-400"}`}>
+                        <span>{pwdHasSymbol ? "✓" : "○"}</span>
+                        <span>Ikon / Simbol Unik (!@#$% dll.)</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Field 4: Captcha */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex-1 bg-slate-100 border border-slate-300 rounded-xl px-3 py-1.5 flex items-center justify-center gap-2 select-none h-10 shadow-inner">
+                        {captchaLoading || !captchaCode ? (
+                          <div className="flex items-center gap-2 text-slate-500 text-xs">
+                            <span className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                            <span>Memuat captcha...</span>
+                          </div>
+                        ) : (
+                          captchaCode.split("").map((ch, idx) => (
+                            <span
+                              key={idx}
+                              style={{ color: CAPTCHA_COLORS[idx % CAPTCHA_COLORS.length] }}
+                              className="font-black text-base font-mono"
+                            >
+                              {ch}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={captchaLoading || captchaRotating}
+                        onClick={refreshCaptcha}
+                        className="p-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-600 transition disabled:opacity-60 shadow-sm"
+                        title="Ganti Kode Captcha"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      maxLength={5}
+                      value={captchaInput}
+                      onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
+                      placeholder="MASUKKAN 5 KODE CAPTCHA DI ATAS"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-center font-mono font-bold uppercase tracking-wider text-xs focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegStep(1)}
+                      className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition text-center flex items-center justify-center"
+                    >
+                      ← Kembali ke Step 1
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={!isStep2Valid || regBusy}
+                      className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs transition shadow-md shadow-red-600/30 flex items-center justify-center gap-1.5"
+                    >
+                      {regBusy ? "Mendaftarkan..." : "Daftar Akun Sekarang ✓"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </>
           )}
         </div>

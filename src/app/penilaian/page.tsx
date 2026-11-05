@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { showError, showSuccess, showWarning } from "@/lib/swal";
 
 export default function FormPenilaianPage() {
   const router = useRouter();
@@ -20,17 +21,17 @@ export default function FormPenilaianPage() {
     const cleanPesan = pesan.trim();
 
     if (!cleanNama || !cleanPesan) {
-      alert("Harap lengkapi Nama dan Pesan.");
+      showWarning("Data Belum Lengkap", "Harap lengkapi Nama dan Pesan ulasan Anda.");
       return;
     }
 
     if (cleanNama.length > 50 || cleanPesan.length > 50) {
-      alert("Nama dan isi penilaian maksimal 50 huruf!");
+      showWarning("Karakter Melebihi Batas", "Nama dan isi penilaian maksimal 50 huruf!");
       return;
     }
 
     if (/\.php|<\?php/i.test(cleanNama) || /\.php|<\?php/i.test(cleanPesan)) {
-      alert("Akses Ditolak: Dilarang memasukkan file atau script .php!");
+      showError("Akses Ditolak", "Dilarang memasukkan file atau script .php!");
       return;
     }
 
@@ -43,24 +44,32 @@ export default function FormPenilaianPage() {
           type: "review",
           nama: cleanNama.slice(0, 50),
           kategori,
-          angkatan: kategori === "ppi" ? angkatan.slice(0, 10) || "-" : "-",
+          angkatan:
+            kategori === "ppi"
+              ? angkatan.trim()
+                ? angkatan.trim().toUpperCase().startsWith("PPI")
+                  ? angkatan.trim().toUpperCase()
+                  : `PPI-${angkatan.trim()}`
+                : "PPI"
+              : "Umum",
           rating,
           pesan: cleanPesan.slice(0, 50),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Gagal mengirim penilaian.");
+        showError("Gagal Mengirim", data.error || "Gagal mengirim penilaian.");
         setSubmitting(false);
         return;
       }
 
+      await showSuccess("Penilaian Terkirim!", "Terima kasih atas ulasan & apresiasi Anda untuk PPI Kab. Probolinggo.");
       setSubmitted(true);
       setTimeout(() => {
         window.location.href = "/#penilaian-preview";
-      }, 1200);
+      }, 800);
     } catch {
-      alert("Terjadi kesalahan jaringan.");
+      showError("Gangguan Jaringan", "Gagal menghubungi server. Silakan coba kembali.");
       setSubmitting(false);
     }
   };
@@ -80,8 +89,8 @@ export default function FormPenilaianPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 py-12">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 py-8 sm:py-12">
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-8 shadow-2xl">
         <div className="text-center mb-7">
           <h1 className="text-2xl font-bold text-white tracking-tight">Form Penilaian PPI</h1>
           <p className="text-xs text-zinc-400 mt-1">
