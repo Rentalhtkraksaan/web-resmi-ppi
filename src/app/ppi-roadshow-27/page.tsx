@@ -494,7 +494,7 @@ export default function PpiRoadshow27Page() {
         if (code && code.data) {
           verifyScannedQrCode(code.data);
         }
-      }, 180);
+      }, 80);
     } catch {
       setCameraError(
         "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau pilih foto QR di bawah."
@@ -542,18 +542,18 @@ export default function PpiRoadshow27Page() {
           "AKSES DIBLOKIR! Barcode/QR yang di-scan BUKAN berasal dari QR Resmi Super Admin PPI!"
         );
       } else {
+        // INSTANT TRANSITION (<0.1s): Langsung buka layar input tanpa jeda/popup
         stopCameraStream();
         setQrVerified(true);
         setActiveSchoolId(data.school.id);
-        showSuccess("QR Terverifikasi!", `Akses ke formulir ${data.school.namaSekolah} berhasil dibuka.`);
-        await loadRoadshowData(data.school.id, true);
+        if (data.candidates) setCandidates(data.candidates);
+        if (data.school) setSchools([data.school]);
+        loadRoadshowData(data.school.id, false);
       }
     } catch {
       setQrScanError("Gagal menghubungi server verifikasi QR.");
     } finally {
-      setTimeout(() => {
-        setQrVerifying(false);
-      }, 1000);
+      setQrVerifying(false);
     }
   };
 
@@ -1489,13 +1489,15 @@ export default function PpiRoadshow27Page() {
                             >
                               <Edit className="w-3.5 h-3.5" /> Edit
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCandidate(c.id, c.nama)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 font-semibold"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> Hapus
-                            </button>
+                            {isAdminRoadshow && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCandidate(c.id, c.nama)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 font-semibold"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Hapus
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1947,14 +1949,16 @@ export default function PpiRoadshow27Page() {
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
-              <button
-                type="button"
-                disabled={savingCandidateBusy}
-                onClick={() => handleDeleteCandidate(editingCandidate.id, editingCandidate.nama)}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 text-xs font-bold disabled:opacity-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Hapus Peserta
-              </button>
+              {isAdminRoadshow && (
+                <button
+                  type="button"
+                  disabled={savingCandidateBusy}
+                  onClick={() => handleDeleteCandidate(editingCandidate.id, editingCandidate.nama)}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 text-xs font-bold disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus Peserta
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={savingCandidateBusy}

@@ -361,26 +361,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await prisma.userAccount.update({
-      where: { id: session.userId },
-      data: { assignedSchoolId: school.id },
-    });
-
-    await prisma.securityAuditLog.create({
-      data: {
-        actorName: session.fullName,
-        actorRole: session.role,
-        action: "QR_SCAN_SUCCESS",
-        details: `Berhasil scan QR Super Admin untuk sekolah: ${school.namaSekolah}`,
-      },
-    });
+    const [candidates] = await Promise.all([
+      prisma.roadshowCandidate.findMany({
+        where: { schoolId: school.id },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.userAccount.update({
+        where: { id: session.userId },
+        data: { assignedSchoolId: school.id },
+      }),
+      prisma.securityAuditLog.create({
+        data: {
+          actorName: session.fullName,
+          actorRole: session.role,
+          action: "QR_SCAN_SUCCESS",
+          details: `Berhasil scan QR Super Admin untuk sekolah: ${school.namaSekolah}`,
+        },
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,
       school: {
         id: school.id,
         namaSekolah: school.namaSekolah,
+        lokasi: school.lokasi,
+        tanggal: school.tanggal,
+        statusPenilaian: school.statusPenilaian,
       },
+      candidates,
     });
   }
 
@@ -1112,11 +1121,14 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (type === "candidate") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json(
+        { error: "Akses ditolak. Petugas/Panitia hanya memiliki izin CRU (Create, Read, Update). Penghapusan data peserta hanya dapat dilakukan oleh Super Admin / Admin Roadshow." },
+        { status: 403 }
+      );
+    }
     const existing = await prisma.roadshowCandidate.findUnique({ where: { id } });
     if (existing) {
-      if (!isAdminRoadshow && session.assignedSchoolId !== existing.schoolId) {
-        return NextResponse.json({ error: "Anda hanya dapat menghapus peserta di sekolah penugasan Anda." }, { status: 403 });
-      }
       await prisma.roadshowCandidate.delete({ where: { id } });
       if (existing.firebaseKey) {
         await firebaseDelete(ROADSHOW_RTDB_URL, `peserta/${existing.firebaseKey}`).catch(() => {});

@@ -188,15 +188,16 @@ export function validateCommitteeRegistrationInput(input: {
 
 /**
  * WAF Inspection:
- * Blocks SQL Injection, XSS, PHP files/scripts (.php, <?php), and Prototype Pollution.
+ * Comprehensive Anti-Injection Protection (SQLi, XSS, PHP execution, RCE, Prototype Pollution).
  */
 const WAF_PATTERNS = [
   /\.php(\b|$|\?|#)/i,
   /<\?php|<\?=/i,
-  /(\b(SELECT|UNION|INSERT|UPDATE|DELETE|DROP|ALTER|EXEC|SLEEP|BENCHMARK)\b\s+(ALL|FROM|INTO|TABLE|DATABASE|\())/i,
-  /('|\bOR\b|\bAND\b)\s*['"]?\d+['"]?\s*=\s*['"]?\d+/i,
-  /--\s*$/m,
-  /;\s*(DROP|DELETE|UPDATE|INSERT)\b/i,
+  /(\b(SELECT|UNION|INSERT|UPDATE|DELETE|DROP|ALTER|EXEC|EXECUTE|SLEEP|BENCHMARK|EXTRACTVALUE|UPDATEXML)\b\s+(ALL|FROM|INTO|TABLE|DATABASE|\())/i,
+  /('|\bOR\b|\bAND\b)\s*['"]?[a-zA-Z0-9_]+['"]?\s*=\s*['"]?[a-zA-Z0-9_]+/i,
+  /(--|#|\/\*|\*\/)/m,
+  /;\s*(DROP|DELETE|UPDATE|INSERT|SELECT|SHUTDOWN)\b/i,
+  /\b(INFORMATION_SCHEMA|SYS\.TABLES|XP_CMDSHELL|LOAD_FILE|INTO\s+OUTFILE|INTO\s+DUMPFILE)\b/i,
   /<\s*script\b[^>]*>/i,
   /javascript\s*:/i,
   /\bon(error|load|mouseover|click|focus)\s*=/i,

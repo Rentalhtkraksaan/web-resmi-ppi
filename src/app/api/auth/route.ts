@@ -321,6 +321,9 @@ export async function POST(req: NextRequest) {
     if (password.length < 8) {
       return NextResponse.json({ error: "Password minimal 8 karakter." }, { status: 400 });
     }
+    if (password.length > 20) {
+      return NextResponse.json({ error: "Password maksimal 20 karakter." }, { status: 400 });
+    }
     if (!/[A-Z]/.test(password)) {
       return NextResponse.json({ error: "Password wajib memiliki minimal 1 huruf besar (A-Z)." }, { status: 400 });
     }
@@ -459,8 +462,11 @@ export async function POST(req: NextRequest) {
     if (!identifier || !password) {
       return NextResponse.json({ error: "Username/Email dan password wajib diisi." }, { status: 400 });
     }
-    if (!identifier.includes("@") && identifier.length > 20) {
-      return NextResponse.json({ error: "Username maksimal 20 karakter." }, { status: 400 });
+    if (identifier.length > 50) {
+      return NextResponse.json({ error: "Username atau email maksimal 50 karakter." }, { status: 400 });
+    }
+    if (password.length > 20) {
+      return NextResponse.json({ error: "Password maksimal 20 karakter." }, { status: 400 });
     }
 
     const cleanId = identifier.toLowerCase().replace(/\s+/g, "_");
@@ -732,10 +738,16 @@ export async function POST(req: NextRequest) {
     if (!rawEmail || !otpInput || !newPassword) {
       return NextResponse.json({ error: "Email, kode OTP, dan password baru wajib diisi." }, { status: 400 });
     }
+    if (rawEmail.length > 50) {
+      return NextResponse.json({ error: "Alamat email maksimal 50 karakter." }, { status: 400 });
+    }
 
     // Validasi kekuatan password
     if (newPassword.length < 8) {
       return NextResponse.json({ error: "Password baru minimal 8 karakter." }, { status: 400 });
+    }
+    if (newPassword.length > 20) {
+      return NextResponse.json({ error: "Password baru maksimal 20 karakter." }, { status: 400 });
     }
 
     // Baca data OTP dari SystemFlag

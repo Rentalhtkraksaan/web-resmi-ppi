@@ -102,8 +102,8 @@ export default function PaskibrakaAuthSplit({
     !dupStatus.phoneTaken &&
     !dupStatus.phoneError;
 
-  // Password validation: 8+ chars, upper, lower, number, unique icon/symbol
-  const pwdHasMinLen = regPassword.length >= 8;
+  // Password validation: 8-20 chars, upper, lower, number, unique icon/symbol
+  const pwdHasMinLen = regPassword.length >= 8 && regPassword.length <= 20;
   const pwdHasUpper = /[A-Z]/.test(regPassword);
   const pwdHasLower = /[a-z]/.test(regPassword);
   const pwdHasNumber = /[0-9]/.test(regPassword);
@@ -473,8 +473,9 @@ export default function PaskibrakaAuthSplit({
                     <input
                       type="text"
                       required
+                      maxLength={50}
                       value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      onChange={(e) => setUsername(e.target.value.slice(0, 50))}
                       placeholder="Masukkan username atau email..."
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition shadow-sm"
                     />
@@ -506,8 +507,9 @@ export default function PaskibrakaAuthSplit({
                     <input
                       type={showPassword ? "text" : "password"}
                       required
+                      maxLength={20}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value.slice(0, 20))}
                       placeholder="Masukkan password..."
                       className="w-full pl-10 pr-11 py-2.5 rounded-xl bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition shadow-sm"
                     />
@@ -985,8 +987,9 @@ export default function PaskibrakaAuthSplit({
                     <input
                       type={showRegPassword ? "text" : "password"}
                       required
+                      maxLength={20}
                       value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
+                      onChange={(e) => setRegPassword(e.target.value.slice(0, 20))}
                       placeholder="Buat password kombinasi yang kuat..."
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100 transition shadow-sm"
                     />
@@ -995,7 +998,7 @@ export default function PaskibrakaAuthSplit({
                     <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-1.5 text-[11px]">
                       <span className={`flex items-center gap-1 font-semibold ${pwdHasMinLen ? "text-emerald-600" : "text-slate-400"}`}>
                         <span>{pwdHasMinLen ? "✓" : "○"}</span>
-                        <span>Min. 8 Karakter</span>
+                        <span>8 - 20 Karakter</span>
                       </span>
                       <span className={`flex items-center gap-1 font-semibold ${pwdHasUpper ? "text-emerald-600" : "text-slate-400"}`}>
                         <span>{pwdHasUpper ? "✓" : "○"}</span>
@@ -1161,8 +1164,9 @@ export default function PaskibrakaAuthSplit({
                   <input
                     type="email"
                     required
+                    maxLength={50}
                     value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
+                    onChange={(e) => setForgotEmail(e.target.value.slice(0, 50))}
                     placeholder="nama@gmail.com"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 shadow-sm transition [color-scheme:light]"
                   />
@@ -1249,9 +1253,10 @@ export default function PaskibrakaAuthSplit({
                     type="password"
                     required
                     minLength={8}
+                    maxLength={20}
                     value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    placeholder="Minimal 8 karakter..."
+                    onChange={(e) => setForgotNewPassword(e.target.value.slice(0, 20))}
+                    placeholder="Minimal 8 & maksimal 20 karakter..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 shadow-sm transition [color-scheme:light]"
                   />
                 </div>
