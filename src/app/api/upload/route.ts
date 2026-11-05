@@ -1,12 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 import { getServerSession } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+type CloudinaryConfig = { cloudName: string; apiKey: string; apiSecret: string; folder: string };
+
+function getCloudinaryConfig(): CloudinaryConfig | null {
+  const folder = process.env.CLOUDINARY_FOLDER || "ppi-probolinggo";
+  // Format tunggal: CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+  const urlEnv = process.env.CLOUDINARY_URL;
+  if (urlEnv) {
+    const m = urlEnv.match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
+    if (m) return { apiKey: m[1], apiSecret: m[2], cloudName: m[3], folder };
+  }
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  if (cloudName && apiKey && apiSecret) return { cloudName, apiKey, apiSecret, folder };
+  return null;
+}
+
+async function uploadToCloudinary(buffer: Buffer, mime: string, cfg: CloudinaryConfig): Promise<string> {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const toSign = `folder=${cfg.folder}&timestamp=${timestamp}`;
+  const signature = crypto.createHash("sha1").update(toSign + cfg.apiSecret).digest("hex");
+
+  const form = new FormData();
+  form.append("file", `data:${mime};base64,${buffer.toString("base64")}`);
+  form.append("api_key", cfg.apiKey);
+  form.append("timestamp", timestamp);
+  form.append("folder", cfg.folder);
+  form.append("signature", signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cfg.cloudName}/image/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.secure_url) {
+    throw new Error(data?.error?.message || `HTTP ${res.status}`);
+  }
+  return data.secure_url as string;
+}
 
 // Helper: verify magic numbers of image buffer
 function verifyImageMagicBytes(buffer: Buffer, ext: string): boolean {
@@ -153,7 +197,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Generate collision-resistant sanitized filename
+    // 5. Simpan gambar ke Cloudinary (WAJIB di hosting; filesystem hosting bersifat sementara)
+    const cloudinary = getCloudinaryConfig();
+    if (cloudinary) {
+      try {
+        const url = await uploadToCloudinary(buffer, file.type, cloudinary);
+        return NextResponse.json({ success: true, url });
+      } catch (cloudErr: any) {
+        return NextResponse.json(
+          { error: "Gagal mengunggah ke Cloudinary: " + (cloudErr?.message || "Unknown error") },
+          { status: 502 }
+        );
+      }
+    }
+
+    // Tanpa Cloudinary: hanya diizinkan saat pengembangan lokal (disk lokal)
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        {
+          error:
+            "Cloudinary belum dikonfigurasi di server. Isi CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, dan CLOUDINARY_API_SECRET pada Environment Variables hosting.",
+        },
+        { status: 500 }
+      );
+    }
+
     const safeExt = ext === ".jpeg" ? ".jpg" : ext;
     const safeName = `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}${safeExt}`;
     const uploadDir = path.join(process.cwd(), "public", "uploads");

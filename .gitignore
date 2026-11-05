@@ -29,3 +29,11 @@ prisma/*.db-shm
 
 # Embedded git repo
 umum/
+
+# Database lokal (jangan di-commit; data hidup di PostgreSQL hosted)
+prisma/dev.db
+prisma/_sqlite_tmp.prisma
+public/uploads/
+.env
+.env.*
+!.env.example

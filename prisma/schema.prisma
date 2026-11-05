@@ -23,6 +23,12 @@ model UserAccount {
   updatedAt        DateTime @updatedAt
 }
 
+model SystemFlag {
+  key       String   @id
+  value     String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
 model LoginAttempt {
   id              String    @id @default(cuid())
   ipOrFingerprint String    @unique

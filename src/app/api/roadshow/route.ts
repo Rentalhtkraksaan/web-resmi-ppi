@@ -226,8 +226,11 @@ export async function GET(req: NextRequest) {
   }
 
   // STRICT QR SCAN ENFORCEMENT FOR FIELD COMMITTEE (PANITIA):
-  // Field officers (!isAdminRoadshow) MUST scan Super Admin's QR code for today's active school first!
-  const qrVerified = isAdminRoadshow || Boolean(todaySchool && session.assignedSchoolId === todaySchool.id);
+  // Field officers (!isAdminRoadshow) MUST scan Super Admin's QR code for a valid school first!
+  const hasAssignedValidSchool = Boolean(
+    session.assignedSchoolId && schools.some((s) => s.id === session.assignedSchoolId)
+  );
+  const qrVerified = isAdminRoadshow || hasAssignedValidSchool;
 
   if (!qrVerified) {
     return NextResponse.json({
@@ -248,18 +251,20 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const lockedOfficerSchoolId = todaySchool?.id || session.assignedSchoolId || schools[0]?.id || "";
+  const assignedSchool = session.assignedSchoolId
+    ? schools.find((s) => s.id === session.assignedSchoolId)
+    : null;
 
   const effectiveSchoolId = isAdminRoadshow
-    ? schoolId || todaySchool?.id || schools[0]?.id || ""
-    : lockedOfficerSchoolId;
+    ? schoolId || session.assignedSchoolId || todaySchool?.id || schools[0]?.id || ""
+    : assignedSchool?.id || todaySchool?.id || schools[0]?.id || "";
 
   const visibleSchools = isAdminRoadshow
     ? schools.map((s) => ({
         ...s,
         qrPayload: signSchoolQrToken(s.id, s.namaSekolah),
       }))
-    : schools.filter((s) => s.id === lockedOfficerSchoolId);
+    : schools.filter((s) => s.id === effectiveSchoolId);
 
   const candidates = effectiveSchoolId
     ? await prisma.roadshowCandidate.findMany({
@@ -334,15 +339,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Sekolah pada QR tidak ditemukan di database." },
         { status: 404 }
-      );
-    }
-
-    if (school.statusPenilaian !== "Hari Ini" && !isAdminRoadshow) {
-      return NextResponse.json(
-        {
-          error: `AKSES DITOLAK! QR "${school.namaSekolah}" bukan Sekolah Kunjungan Hari Ini atau sudah dikunci oleh Super Admin.`,
-        },
-        { status: 403 }
       );
     }
 
@@ -446,7 +442,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sekolah tidak ditemukan." }, { status: 404 });
     }
     if (!isAdminRoadshow) {
-      if (session.assignedSchoolId !== school.id || school.statusPenilaian !== "Hari Ini") {
+      if (session.assignedSchoolId !== school.id) {
         return NextResponse.json(
           { error: "Wajib Scan QR Code Resmi Super Admin terlebih dahulu untuk membuka akses sekolah ini!" },
           { status: 403 }
@@ -754,19 +750,58 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: true, candidate: updated });
   }
 
-  // 2. Admin Roadshow Controls (Override Lulus, Toggle Tayang, Keterangan, Edit Biodata Peserta)
-  if (action === "admin_update_candidate") {
-    if (!isAdminRoadshow) {
+  // 2. Candidate Updates (Admin Roadshow & Panitia User)
+  if (action === "admin_update_candidate" || action === "update_candidate") {
+    const candidateId = String(body.candidateId || "");
+    const existing = await prisma.roadshowCandidate.findUnique({
+      where: { id: candidateId },
+      include: { school: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Peserta tidak ditemukan." }, { status: 404 });
+    }
+
+    if (!isAdminRoadshow && session.assignedSchoolId !== existing.schoolId) {
       return NextResponse.json(
-        { error: "Role User hanya diizinkan mengisi BB & TB. Pengaturan kelulusan & tayang khusus Admin Roadshow." },
+        { error: "Anda hanya memiliki akses untuk memperbarui data peserta di sekolah penugasan Anda." },
         { status: 403 }
       );
     }
 
-    const candidateId = String(body.candidateId || "");
-    const existing = await prisma.roadshowCandidate.findUnique({ where: { id: candidateId } });
-    if (!existing) {
-      return NextResponse.json({ error: "Peserta tidak ditemukan." }, { status: 404 });
+    let beratBadan = existing.beratBadan;
+    if (body.beratBadan !== undefined) {
+      const parsedBB = Number(body.beratBadan);
+      if (!isNaN(parsedBB) && parsedBB >= 0) beratBadan = parsedBB;
+    }
+
+    let tinggiBadan = existing.tinggiBadan;
+    if (body.tinggiBadan !== undefined) {
+      const parsedTB = Number(body.tinggiBadan);
+      if (!isNaN(parsedTB) && parsedTB >= 0) tinggiBadan = parsedTB;
+    }
+
+    // Auto calculate lulus if measurements updated
+    let hasilLulus = existing.hasilLulus;
+    if (beratBadan > 0 && tinggiBadan > 0) {
+      const s = existing.school;
+      const gender = body.jenisKelamin || existing.jenisKelamin;
+      if (gender === "Cewek") {
+        hasilLulus =
+          beratBadan >= s.minBeratCewek &&
+          beratBadan <= s.maxBeratCewek &&
+          tinggiBadan >= s.minTinggiCewek &&
+          tinggiBadan <= s.maxTinggiCewek;
+      } else {
+        hasilLulus =
+          beratBadan >= s.minBeratCowok &&
+          beratBadan <= s.maxBeratCowok &&
+          tinggiBadan >= s.minTinggiCowok &&
+          tinggiBadan <= s.maxTinggiCowok;
+      }
+    }
+
+    if (isAdminRoadshow && body.hasilLulus !== undefined) {
+      hasilLulus = Boolean(body.hasilLulus);
     }
 
     const updated = await prisma.roadshowCandidate.update({
@@ -779,8 +814,13 @@ export async function PUT(req: NextRequest) {
               ? "Cewek"
               : "Cowok"
             : existing.jenisKelamin,
-        hasilLulus: body.hasilLulus !== undefined ? Boolean(body.hasilLulus) : existing.hasilLulus,
-        statusTayang: body.statusTayang !== undefined ? Boolean(body.statusTayang) : existing.statusTayang,
+        beratBadan,
+        tinggiBadan,
+        hasilLulus,
+        statusTayang:
+          isAdminRoadshow && body.statusTayang !== undefined
+            ? Boolean(body.statusTayang)
+            : existing.statusTayang,
         keterangan: body.keterangan !== undefined ? sanitizeString(String(body.keterangan)) : existing.keterangan,
         updatedBy: session.fullName,
       },
@@ -796,7 +836,7 @@ export async function PUT(req: NextRequest) {
       keterangan: updated.keterangan,
       adminInput: session.fullName,
       lastUpdate: new Date().toISOString(),
-    });
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, candidate: updated });
   }
@@ -848,6 +888,41 @@ export async function PUT(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
+  }
+
+  // 4b. Manual Toggle / Aktifkan / Matikan Sekolah Secara Manual (Super Admin & Admin Roadshow)
+  if (action === "toggle_school_status") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json({ error: "Khusus Super Admin atau Admin Roadshow." }, { status: 403 });
+    }
+    const schoolId = String(body.schoolId || "");
+    const newStatus = body.status === "Hari Ini" ? "Hari Ini" : "Ditutup";
+
+    const targetSchool = await prisma.roadshowSchool.findUnique({ where: { id: schoolId } });
+    if (!targetSchool) {
+      return NextResponse.json({ error: "Sekolah tidak ditemukan." }, { status: 404 });
+    }
+
+    if (newStatus === "Hari Ini") {
+      await prisma.roadshowSchool.updateMany({
+        where: { id: { not: schoolId } },
+        data: { statusPenilaian: "Ditutup" },
+      });
+    }
+
+    const updated = await prisma.roadshowSchool.update({
+      where: { id: schoolId },
+      data: { statusPenilaian: newStatus },
+    });
+
+    if (targetSchool.firebaseKey) {
+      await firebasePut(ROADSHOW_RTDB_URL, `sekolah/${targetSchool.firebaseKey}`, {
+        namaSekolah: targetSchool.namaSekolah,
+        statusPenilaian: newStatus,
+      }).catch(() => {});
+    }
+
+    return NextResponse.json({ success: true, school: updated });
   }
 
   // 5. Toggle School Status / Thresholds
@@ -951,10 +1026,10 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   await ensureSeeded();
-  const { session, isAdminRoadshow } = await getRoadshowAccess();
-  if (!session || !isAdminRoadshow) {
+  const { session, isAdminRoadshow, isUserRoadshow } = await getRoadshowAccess();
+  if (!session || (!isAdminRoadshow && !isUserRoadshow)) {
     return NextResponse.json(
-      { error: "Hanya Super Admin atau Admin Roadshow yang dapat menghapus data." },
+      { error: "Akses ditolak." },
       { status: 403 }
     );
   }
@@ -965,6 +1040,9 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID diperlukan" }, { status: 400 });
 
   if (type === "post") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json({ error: "Khusus Super Admin atau Admin Roadshow." }, { status: 403 });
+    }
     const existing = await prisma.roadshowPost.findUnique({ where: { id } });
     if (existing) {
       await prisma.roadshowPost.delete({ where: { id } });
@@ -983,21 +1061,27 @@ export async function DELETE(req: NextRequest) {
   if (type === "candidate") {
     const existing = await prisma.roadshowCandidate.findUnique({ where: { id } });
     if (existing) {
+      if (!isAdminRoadshow && session.assignedSchoolId !== existing.schoolId) {
+        return NextResponse.json({ error: "Anda hanya dapat menghapus peserta di sekolah penugasan Anda." }, { status: 403 });
+      }
       await prisma.roadshowCandidate.delete({ where: { id } });
       if (existing.firebaseKey) {
-        await firebaseDelete(ROADSHOW_RTDB_URL, `peserta/${existing.firebaseKey}`);
-        await firebaseDelete(ROADSHOW_RTDB_URL, `penilaian/pen_${existing.firebaseKey}`);
+        await firebaseDelete(ROADSHOW_RTDB_URL, `peserta/${existing.firebaseKey}`).catch(() => {});
+        await firebaseDelete(ROADSHOW_RTDB_URL, `penilaian/pen_${existing.firebaseKey}`).catch(() => {});
       }
     }
     return NextResponse.json({ success: true });
   }
 
   if (type === "school") {
+    if (!isAdminRoadshow) {
+      return NextResponse.json({ error: "Khusus Super Admin atau Admin Roadshow." }, { status: 403 });
+    }
     const existing = await prisma.roadshowSchool.findUnique({ where: { id } });
     if (existing) {
       await prisma.roadshowSchool.delete({ where: { id } });
       if (existing.firebaseKey) {
-        await firebaseDelete(ROADSHOW_RTDB_URL, `sekolah/${existing.firebaseKey}`);
+        await firebaseDelete(ROADSHOW_RTDB_URL, `sekolah/${existing.firebaseKey}`).catch(() => {});
       }
     }
     await prisma.securityAuditLog.create({
@@ -1013,4 +1097,8 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ error: "Invalid delete type" }, { status: 400 });
 }
+
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 

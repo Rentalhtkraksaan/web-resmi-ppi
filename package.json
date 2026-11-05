@@ -3,10 +3,12 @@
   "version": "3.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
+    "dev": "node scripts/select-db.js && next dev",
+    "build": "node scripts/select-db.js && prisma generate && node scripts/push-db.js && next build",
     "start": "next start",
-    "db:push": "prisma db push"
+    "db:push": "node scripts/select-db.js && prisma db push",
+    "db:setup": "node scripts/select-db.js && prisma db push",
+    "db:migrate-data": "node scripts/migrate-sqlite-to-postgres.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

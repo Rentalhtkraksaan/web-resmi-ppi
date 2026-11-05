@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLive } from "@/lib/useLive";
 import Link from "next/link";
 import { UMUM_RTDB_URL } from "@/lib/firebase";
 import { showConfirm, showError, showSuccess } from "@/lib/swal";
@@ -141,6 +142,28 @@ export default function LandingPage() {
       console.error("Landing data load error:", e);
     }
   };
+
+  const liveSnapshotRef = useRef<string>("");
+
+  // Realtime: ambil ulang data publik (tanpa auth) & hanya update state jika benar-benar berubah
+  const loadLive = async () => {
+    const [landingRes, roadshowRes] = await Promise.all([
+      fetch("/api/landing", { cache: "no-store" }),
+      fetch("/api/roadshow?mode=public", { cache: "no-store" }),
+    ]);
+    if (!landingRes.ok || !roadshowRes.ok) return;
+    const landing = await landingRes.json();
+    const rs = await roadshowRes.json();
+    const snapshot = JSON.stringify([landing.config, landing.items, landing.reviews, rs.schedule]);
+    if (snapshot === liveSnapshotRef.current) return;
+    liveSnapshotRef.current = snapshot;
+    setConfig(landing.config);
+    setItems(landing.items || []);
+    setReviews(landing.reviews || []);
+    setRoadshowSchedule(rs.schedule || []);
+  };
+
+  useLive(loadLive, 1500);
 
   useEffect(() => {
     loadData();

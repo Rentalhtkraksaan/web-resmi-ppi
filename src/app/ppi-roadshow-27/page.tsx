@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useLive } from "@/lib/useLive";
 import Link from "next/link";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
@@ -11,6 +12,7 @@ import {
   Camera,
   Check,
   CheckCircle,
+  Edit,
   FileText,
   Lock,
   Plus,
@@ -90,8 +92,22 @@ export default function PpiRoadshow27Page() {
   const [qrVerified, setQrVerified] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Active Filter Tab inside unlocked workspace: ALL_TABLES (BB & TB) | REGISTRASI | ADMIN_PANEL | POSTS_PANEL
-  const [activeTab, setActiveTab] = useState<"ALL_TABLES" | "REGISTRASI" | "ADMIN_PANEL" | "POSTS_PANEL">("ALL_TABLES");
+  // Active Filter Tab: TABEL_BB (Tabel BB) | TABEL_TB (Tabel TB) | REGISTRASI | ADMIN_PANEL | POSTS_PANEL
+  const [activeTab, setActiveTab] = useState<"TABEL_BB" | "TABEL_TB" | "REGISTRASI" | "ADMIN_PANEL" | "POSTS_PANEL">("TABEL_BB");
+
+  // Candidate Edit Modal State (Panitia User & Admin)
+  const [editingCandidate, setEditingCandidate] = useState<RoadshowCandidate | null>(null);
+  const [editCandidateNama, setEditCandidateNama] = useState("");
+  const [editCandidateGender, setEditCandidateGender] = useState<"Cowok" | "Cewek">("Cowok");
+  const [editCandidateBB, setEditCandidateBB] = useState("");
+  const [editCandidateTB, setEditCandidateTB] = useState("");
+  const [editCandidateKet, setEditCandidateKet] = useState("");
+  const [savingCandidateBusy, setSavingCandidateBusy] = useState(false);
+
+  // Manual QR input fallback
+  const [showManualQrInput, setShowManualQrInput] = useState(false);
+  const [manualQrText, setManualQrText] = useState("");
+  const [cameraFacing, setCameraFacing] = useState<"environment" | "user">("environment");
 
   // Roadshow Posts (Berita & Agenda Kunjungan) State
   const [posts, setPosts] = useState<RoadshowPost[]>([]);
@@ -117,6 +133,8 @@ export default function PpiRoadshow27Page() {
   // Panitia Auto-Camera QR Scanner State
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [qrScanError, setQrScanError] = useState<string | null>(null);
@@ -144,6 +162,11 @@ export default function PpiRoadshow27Page() {
       }
 
       setUser(authData.user);
+      const isManagerUser =
+        authData.user.role === "SUPER_ADMIN" ||
+        authData.user.role === "ADMIN" ||
+        Boolean(authData.user.permissions?.manageRoadshow);
+
       const sid = targetSchoolId !== undefined ? targetSchoolId : activeSchoolId;
       const q = sid ? `&schoolId=${encodeURIComponent(sid)}` : "";
       const rsRes = await fetch(`/api/roadshow?mode=internal${q}`, { cache: "no-store" });
@@ -154,12 +177,12 @@ export default function PpiRoadshow27Page() {
           setActiveSchoolId(rsData.activeSchoolId);
         }
         setCandidates(rsData.candidates || []);
-        const adminAccess = Boolean(rsData.access?.isAdminRoadshow);
+        const adminAccess = Boolean(rsData.access?.isAdminRoadshow) || isManagerUser;
         setIsAdminRoadshow(adminAccess);
-        setQrVerified(Boolean(rsData.qrVerified));
+        setQrVerified(Boolean(rsData.qrVerified) || adminAccess);
 
         if (isInitial) {
-          setActiveTab(adminAccess ? "ADMIN_PANEL" : "ALL_TABLES");
+          setActiveTab(adminAccess ? "ADMIN_PANEL" : "TABEL_BB");
         }
       }
 
@@ -170,7 +193,7 @@ export default function PpiRoadshow27Page() {
           const pData = await postsRes.json();
           setPosts(pData.posts || []);
         }
-      } catch {}
+      } catch { }
     } finally {
       setAuthLoading(false);
     }
@@ -183,7 +206,7 @@ export default function PpiRoadshow27Page() {
         const pData = await postsRes.json();
         setPosts(pData.posts || []);
       }
-    } catch {}
+    } catch { }
   };
 
   const openCreatePostModal = () => {
@@ -350,14 +373,12 @@ export default function PpiRoadshow27Page() {
     loadRoadshowData(undefined, true);
   }, []);
 
-  // Real-time synchronization interval (updates BB, TB, and candidate status live across devices)
-  useEffect(() => {
-    if (!user || !qrVerified || !activeSchoolId) return;
-    const timer = setInterval(() => {
-      loadRoadshowData(activeSchoolId, false);
-    }, 2500);
-    return () => clearInterval(timer);
-  }, [user, qrVerified, activeSchoolId]);
+  // Real-time synchronization (BB, TB, peserta, sekolah, berita) ~1,5 detik, lintas perangkat
+  useLive(
+    () => loadRoadshowData(activeSchoolId, false),
+    1500,
+    Boolean(user) && qrVerified && Boolean(activeSchoolId)
+  );
 
   // Generate QR Code DataURL whenever Super Admin opens QR Modal for a school
   useEffect(() => {
@@ -377,6 +398,102 @@ export default function PpiRoadshow27Page() {
       .catch(() => setQrDataUrl(""));
   }, [qrModalSchool]);
 
+  // Robust Camera Scanner Functions
+  const stopCameraStream = () => {
+    if (scanTimerRef.current) {
+      clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  };
+
+  const startCamera = async (facing: "environment" | "user" = cameraFacing) => {
+    setCameraError(null);
+    setQrScanError(null);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError(
+          "Browser ini tidak mendukung akses kamera langsung. Silakan gunakan opsi 'Ambil Foto QR' atau ketik kode manual di bawah."
+        );
+        return;
+      }
+
+      stopCameraStream();
+
+      const constraintsList: MediaStreamConstraints[] = [
+        { video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+        { video: { facingMode: facing }, audio: false },
+        { video: { facingMode: facing === "environment" ? "user" : "environment" }, audio: false },
+        { video: true, audio: false },
+      ];
+
+      let streamAcquired: MediaStream | null = null;
+      for (const constraints of constraintsList) {
+        try {
+          streamAcquired = await navigator.mediaDevices.getUserMedia(constraints);
+          if (streamAcquired) break;
+        } catch {
+          // try next constraint
+        }
+      }
+
+      if (!streamAcquired) {
+        setCameraError(
+          "Kamera belum diizinkan atau sedang digunakan oleh aplikasi lain. Klik 'Buka Kamera' atau izinkan akses kamera pada browser."
+        );
+        return;
+      }
+
+      streamRef.current = streamAcquired;
+      if (videoRef.current) {
+        videoRef.current.srcObject = streamAcquired;
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.muted = true;
+        await videoRef.current.play().catch(() => {});
+        setCameraActive(true);
+      }
+
+      if (scanTimerRef.current) clearInterval(scanTimerRef.current);
+      scanTimerRef.current = setInterval(() => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+
+        if (code && code.data) {
+          verifyScannedQrCode(code.data);
+        }
+      }, 180);
+    } catch {
+      setCameraError(
+        "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau pilih foto QR di bawah."
+      );
+    }
+  };
+
+  const toggleFacingMode = () => {
+    const nextFacing = cameraFacing === "environment" ? "user" : "environment";
+    setCameraFacing(nextFacing);
+    startCamera(nextFacing);
+  };
+
   // AUTO-START CAMERA FOR PANITIA WHEN LOGGED IN & NOT YET QR-VERIFIED!
   useEffect(() => {
     if (!user || isAdminRoadshow || qrVerified) {
@@ -384,102 +501,12 @@ export default function PpiRoadshow27Page() {
       return;
     }
 
-    let stream: MediaStream | null = null;
-    let scanTimer: ReturnType<typeof setInterval> | null = null;
-    let isCancelled = false;
-
-    const startCamera = async () => {
-      setCameraError(null);
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setCameraError(
-            "Browser ini tidak mendukung akses kamera langsung. Silakan gunakan opsi pilih file QR di bawah."
-          );
-          return;
-        }
-
-        const constraintsList: MediaStreamConstraints[] = [
-          { video: { facingMode: { ideal: "environment" } }, audio: false },
-          { video: { facingMode: "environment" }, audio: false },
-          { video: true, audio: false },
-        ];
-
-        let streamAcquired: MediaStream | null = null;
-        for (const constraints of constraintsList) {
-          try {
-            streamAcquired = await navigator.mediaDevices.getUserMedia(constraints);
-            if (streamAcquired) break;
-          } catch {
-            // try next
-          }
-        }
-
-        if (!streamAcquired) {
-          setCameraError(
-            "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau unggah file QR di bawah."
-          );
-          return;
-        }
-
-        stream = streamAcquired;
-        if (isCancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute("playsinline", "true");
-          await videoRef.current.play().catch(() => {});
-          setCameraActive(true);
-        }
-
-        // Scan video frames every 200ms using jsQR
-        scanTimer = setInterval(() => {
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-          const ctx = canvas.getContext("2d", { willReadFrequently: true });
-          if (!ctx) return;
-
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert",
-          });
-
-          if (code && code.data) {
-            verifyScannedQrCode(code.data);
-          }
-        }, 200);
-      } catch {
-        setCameraError(
-          "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau unggah file QR di bawah."
-        );
-      }
-    };
-
-    startCamera();
+    startCamera("environment");
 
     return () => {
-      isCancelled = true;
-      if (scanTimer) clearInterval(scanTimer);
-      if (stream) {
-        stream.getTracks().forEach((t) => t.stop());
-      }
-      setCameraActive(false);
+      stopCameraStream();
     };
   }, [user, isAdminRoadshow, qrVerified]);
-
-  const stopCameraStream = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const s = videoRef.current.srcObject as MediaStream;
-      s.getTracks().forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-  };
 
   const verifyScannedQrCode = async (rawQrData: string) => {
     if (qrVerifying || !rawQrData) return;
@@ -498,19 +525,29 @@ export default function PpiRoadshow27Page() {
       if (!res.ok) {
         setQrScanError(
           data.error ||
-            "AKSES DIBLOKIR! Barcode/QR yang di-scan BUKAN berasal dari QR Resmi Super Admin PPI!"
+          "AKSES DIBLOKIR! Barcode/QR yang di-scan BUKAN berasal dari QR Resmi Super Admin PPI!"
         );
       } else {
         stopCameraStream();
         setQrVerified(true);
         setActiveSchoolId(data.school.id);
+        showSuccess("QR Terverifikasi!", `Akses ke formulir ${data.school.namaSekolah} berhasil dibuka.`);
         await loadRoadshowData(data.school.id, true);
       }
+    } catch {
+      setQrScanError("Gagal menghubungi server verifikasi QR.");
     } finally {
       setTimeout(() => {
         setQrVerifying(false);
-      }, 1200);
+      }, 1000);
     }
+  };
+
+  const handleManualQrSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = manualQrText.trim();
+    if (!raw) return;
+    verifyScannedQrCode(raw);
   };
 
   const handleScanFromImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -652,7 +689,7 @@ export default function PpiRoadshow27Page() {
     });
 
     if (res.ok) {
-      setSaveIndicators((prev) => ({ ...prev, [key]: "✓ Tersimpan" }));
+      setSaveIndicators((prev) => ({ ...prev, [key]: "Tersimpan" }));
       setTimeout(() => {
         setSaveIndicators((prev) => ({ ...prev, [key]: "" }));
       }, 1800);
@@ -660,6 +697,99 @@ export default function PpiRoadshow27Page() {
     } else {
       const errData = await res.json().catch(() => ({}));
       setSaveIndicators((prev) => ({ ...prev, [key]: errData.error || "Gagal" }));
+    }
+  };
+
+  const openEditCandidateModal = (c: RoadshowCandidate) => {
+    setEditingCandidate(c);
+    setEditCandidateNama(c.nama);
+    setEditCandidateGender(c.jenisKelamin === "Cewek" ? "Cewek" : "Cowok");
+    setEditCandidateBB(c.beratBadan ? String(c.beratBadan) : "");
+    setEditCandidateTB(c.tinggiBadan ? String(c.tinggiBadan) : "");
+    setEditCandidateKet(c.keterangan || "");
+  };
+
+  const handleSaveCandidateEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCandidate) return;
+    setSavingCandidateBusy(true);
+    try {
+      const res = await fetch("/api/roadshow", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_candidate",
+          candidateId: editingCandidate.id,
+          nama: editCandidateNama.trim(),
+          jenisKelamin: editCandidateGender,
+          beratBadan: editCandidateBB ? Number(editCandidateBB) : 0,
+          tinggiBadan: editCandidateTB ? Number(editCandidateTB) : 0,
+          keterangan: editCandidateKet.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError("Gagal Mengubah Data", data.error || "Gagal menyimpan perubahan.");
+        return;
+      }
+      showSuccess("Data Disimpan", `Data peserta "${editCandidateNama}" berhasil diperbarui.`);
+      setEditingCandidate(null);
+      await loadRoadshowData(activeSchoolId, false);
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
+    } finally {
+      setSavingCandidateBusy(false);
+    }
+  };
+
+  const handleDeleteCandidate = async (candidateId: string, nama: string) => {
+    const confirmRes = await showConfirm(
+      "Hapus Peserta",
+      `Hapus peserta "${nama}" secara permanen dari sistem?`
+    );
+    if (!confirmRes.isConfirmed) return;
+
+    try {
+      const res = await fetch(`/api/roadshow?type=candidate&id=${candidateId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        showSuccess("Peserta Dihapus", `Peserta "${nama}" berhasil dihapus.`);
+        if (editingCandidate?.id === candidateId) setEditingCandidate(null);
+        await loadRoadshowData(activeSchoolId, false);
+      } else {
+        const d = await res.json();
+        showError("Gagal", d.error || "Gagal menghapus peserta.");
+      }
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
+    }
+  };
+
+  const handleToggleSchoolStatus = async (school: RoadshowSchool) => {
+    const nextStatus = school.statusPenilaian === "Hari Ini" ? "Ditutup" : "Hari Ini";
+    try {
+      const res = await fetch("/api/roadshow", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_school_status",
+          schoolId: school.id,
+          status: nextStatus,
+        }),
+      });
+      if (res.ok) {
+        showSuccess(
+          "Status Diperbarui",
+          `Sekolah "${school.namaSekolah}" sekarang ${nextStatus === "Hari Ini" ? "Aktif Hari Ini" : "Ditutup / Terkunci"}.`
+        );
+        await loadRoadshowData(activeSchoolId, false);
+      } else {
+        const d = await res.json();
+        showError("Gagal", d.error || "Gagal mengubah status sekolah.");
+      }
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
     }
   };
 
@@ -693,13 +823,8 @@ export default function PpiRoadshow27Page() {
     if (res.ok) loadRoadshowData(activeSchoolId);
   };
 
-  const handleDeleteCandidate = async (id: string, nama: string) => {
-    if (!confirm(`Hapus peserta "${nama}"?`)) return;
-    const res = await fetch(`/api/roadshow?type=candidate&id=${id}`, { method: "DELETE" });
-    if (res.ok) loadRoadshowData(activeSchoolId);
-  };
-
   const activeSchool = schools.find((s) => s.id === activeSchoolId);
+  const isManager = isAdminRoadshow || user?.role === "SUPER_ADMIN" || user?.role === "ADMIN";
   const filteredCandidates = candidates.filter((c) => {
     const q = searchQuery.toLowerCase().trim();
     return !q || c.nama.toLowerCase().includes(q) || c.kodePeserta.toLowerCase().includes(q);
@@ -728,7 +853,7 @@ export default function PpiRoadshow27Page() {
   // =========================================================================
   // VIEW 2: PANITIA WAJIB SCAN QR CODE SUPER ADMIN (AUTO-CAMERA ON!)
   // =========================================================================
-  if (!isAdminRoadshow && !qrVerified) {
+  if (!isManager && !qrVerified) {
     return (
       <div className="min-h-screen bg-[#0a0a0c] text-zinc-100 flex flex-col">
         <header className="border-b border-zinc-800 px-4 sm:px-8 py-3.5 bg-[#0a0a0c]">
@@ -817,15 +942,26 @@ export default function PpiRoadshow27Page() {
                   <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>{cameraError}</span>
                 </p>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 border border-zinc-700 font-medium transition"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Coba Ulang Kamera
-                </button>
               </div>
             )}
+
+            {/* Kontrol kamera: nyalakan manual + ganti depan/belakang */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => startCamera(cameraFacing)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs text-white font-bold transition"
+              >
+                <Camera className="w-3.5 h-3.5" /> {cameraActive ? "Mulai Ulang" : "Nyalakan Kamera"}
+              </button>
+              <button
+                type="button"
+                onClick={toggleFacingMode}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-100 border border-zinc-700 font-semibold transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> {cameraFacing === "environment" ? "Kamera Depan" : "Kamera Belakang"}
+              </button>
+            </div>
 
             {/* Fallback: Scan directly via Camera Capture / Gallery Image */}
             <div className="pt-1">
@@ -840,6 +976,34 @@ export default function PpiRoadshow27Page() {
                   className="hidden"
                 />
               </label>
+            </div>
+
+            {/* Fallback terakhir: tempel isi QR secara manual */}
+            <div className="text-left">
+              <button
+                type="button"
+                onClick={() => setShowManualQrInput((v) => !v)}
+                className="text-[11px] text-zinc-400 hover:text-white underline underline-offset-2"
+              >
+                {showManualQrInput ? "Tutup input manual" : "Kamera tidak bisa? Masukkan kode QR secara manual"}
+              </button>
+              {showManualQrInput && (
+                <form onSubmit={handleManualQrSubmit} className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={manualQrText}
+                    onChange={(e) => setManualQrText(e.target.value)}
+                    placeholder="Tempel isi QR sekolah..."
+                    className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-red-500 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold"
+                  >
+                    Buka
+                  </button>
+                </form>
+              )}
             </div>
 
             <p className="text-[11px] text-zinc-500 flex items-center justify-center gap-1.5">
@@ -866,8 +1030,8 @@ export default function PpiRoadshow27Page() {
                 {user.role === "SUPER_ADMIN"
                   ? "SUPER ADMIN"
                   : isAdminRoadshow
-                  ? "ADMIN ROADSHOW"
-                  : "PANITIA TERVERIFIKASI QR"}
+                    ? "ADMIN ROADSHOW"
+                    : "PANITIA TERVERIFIKASI QR"}
               </span>
               <h1 className="font-bold text-sm sm:text-base text-white truncate">
                 {activeSchool?.namaSekolah || "Pilih Sekolah"}
@@ -904,7 +1068,7 @@ export default function PpiRoadshow27Page() {
 
       <main className="max-w-6xl mx-auto px-3.5 sm:px-6 py-5 sm:py-7 space-y-5">
         {/* SUPER ADMIN SCHOOL MANAGEMENT + QR CODE GENERATOR */}
-        {isAdminRoadshow ? (
+        {isManager ? (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
@@ -943,19 +1107,17 @@ export default function PpiRoadshow27Page() {
                   <div
                     key={s.id}
                     onClick={() => switchSchool(s.id)}
-                    className={`cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition flex flex-wrap items-center gap-2 ${
-                      active
+                    className={`cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition flex flex-wrap items-center gap-2 ${active
                         ? "bg-red-600 text-white border-red-600"
                         : isToday
-                        ? "bg-emerald-950/60 text-emerald-200 border-emerald-500/60"
-                        : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-                    }`}
+                          ? "bg-emerald-950/60 text-emerald-200 border-emerald-500/60"
+                          : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                      }`}
                   >
                     <span>{s.namaSekolah}</span>
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] ${
-                        active ? "bg-black/30 text-white" : "bg-zinc-800 text-zinc-400"
-                      }`}
+                      className={`px-1.5 py-0.5 rounded text-[10px] ${active ? "bg-black/30 text-white" : "bg-zinc-800 text-zinc-400"
+                        }`}
                     >
                       {s._count?.candidates ?? 0}
                     </span>
@@ -968,15 +1130,17 @@ export default function PpiRoadshow27Page() {
 
                     {active && (
                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {!isToday && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetTodaySchool(s)}
-                            className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[10px]"
-                          >
-                            Aktifkan Hari Ini
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSchoolStatus(s)}
+                          className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                            isToday
+                              ? "bg-black/30 hover:bg-black/50 text-amber-200"
+                              : "bg-emerald-500 hover:bg-emerald-400 text-black"
+                          }`}
+                        >
+                          {isToday ? "Matikan" : "Aktifkan Hari Ini"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => setQrModalSchool(s)}
@@ -1023,23 +1187,31 @@ export default function PpiRoadshow27Page() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setActiveTab("ALL_TABLES")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${
-                activeTab === "ALL_TABLES"
+              onClick={() => setActiveTab("TABEL_BB")}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "TABEL_BB"
                   ? "bg-sky-500 text-black border-sky-500"
                   : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-              }`}
+                }`}
             >
-              Tabel Input BB &amp; TB
+              Tabel BB
+            </button>
+
+            <button
+              onClick={() => setActiveTab("TABEL_TB")}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "TABEL_TB"
+                  ? "bg-amber-500 text-black border-amber-500"
+                  : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                }`}
+            >
+              Tabel TB
             </button>
 
             <button
               onClick={() => setActiveTab("REGISTRASI")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition inline-flex items-center gap-1.5 ${
-                activeTab === "REGISTRASI"
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition inline-flex items-center gap-1.5 ${activeTab === "REGISTRASI"
                   ? "bg-white text-black border-white"
                   : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-              }`}
+                }`}
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Registrasi Peserta</span>
@@ -1048,11 +1220,10 @@ export default function PpiRoadshow27Page() {
             {isAdminRoadshow && (
               <button
                 onClick={() => setActiveTab("ADMIN_PANEL")}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${
-                  activeTab === "ADMIN_PANEL"
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "ADMIN_PANEL"
                     ? "bg-red-600 text-white border-red-600"
                     : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-                }`}
+                  }`}
               >
                 Panel Kelulusan &amp; Tayang
               </button>
@@ -1064,11 +1235,10 @@ export default function PpiRoadshow27Page() {
                   setActiveTab("POSTS_PANEL");
                   loadPosts();
                 }}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
-                  activeTab === "POSTS_PANEL"
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${activeTab === "POSTS_PANEL"
                     ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/30"
                     : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-                }`}
+                  }`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>Kelola Berita Roadshow ({posts.length})</span>
@@ -1104,141 +1274,110 @@ export default function PpiRoadshow27Page() {
         </div>
 
         {/* =================================================================== */}
-        {/* TAB 1: DUA TABEL SEKALIGUS (TABEL BB & TABEL TB) - BEBAS ISI & RAPI */}
+        {/* TAB: TABEL BB & TABEL TB (TERPISAH, MASING-MASING FULL TABLE)        */}
         {/* =================================================================== */}
-        {activeTab === "ALL_TABLES" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* TABEL 1: INPUT BERAT BADAN (BB) */}
-            <div className="bg-zinc-900 border border-sky-500/30 rounded-2xl p-4 sm:p-5 space-y-3.5 overflow-hidden">
-              <div className="border-b border-zinc-800 pb-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
-                  Tabel 1 • Real-Time Sync
-                </span>
-                <h3 className="text-sm sm:text-base font-bold text-white">
-                  Input Berat Badan (BB) — {activeSchool?.namaSekolah}
-                </h3>
-                <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Ketik angka BB (kg) lalu tekan Tab / klik luar untuk simpan otomatis.
-                </p>
-              </div>
-
-              <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
-                {filteredCandidates.length === 0 ? (
-                  <p className="text-zinc-500 text-xs py-8 text-center">
-                    Belum ada peserta di sekolah ini.
+        {(activeTab === "TABEL_BB" || activeTab === "TABEL_TB") &&
+          (() => {
+            const isBB = activeTab === "TABEL_BB";
+            const field = isBB ? "beratBadan" : "tinggiBadan";
+            const unit = isBB ? "kg" : "cm";
+            const accent = isBB ? "text-sky-400 bg-sky-500/15" : "text-amber-400 bg-amber-500/15";
+            return (
+              <div
+                className={`bg-zinc-900 border rounded-2xl p-4 sm:p-5 space-y-4 ${
+                  isBB ? "border-sky-500/30" : "border-amber-500/30"
+                }`}
+              >
+                <div className="border-b border-zinc-800 pb-3">
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isBB ? "text-sky-400" : "text-amber-400"
+                    }`}
+                  >
+                    {isBB ? "Tabel 1" : "Tabel 2"} • Sinkron Real-Time
+                  </span>
+                  <h3 className="text-sm sm:text-base font-bold text-white">
+                    {isBB ? "Input Berat Badan (BB)" : "Input Tinggi Badan (TB)"} — {activeSchool?.namaSekolah}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Ketik angka {isBB ? "BB (kg)" : "TB (cm)"} lalu tekan Tab / klik di luar kolom untuk menyimpan otomatis. Salah ketik nama? Klik tombol Edit.
                   </p>
-                ) : (
-                  filteredCandidates.map((c, idx) => (
-                    <div
-                      key={`bb_row_${c.id}`}
-                      className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-2.5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[11px] text-zinc-500 font-mono">#{idx + 1}</span>
-                          <span className="font-mono font-bold text-[11px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">
-                            {c.kodePeserta}
-                          </span>
-                          <span className="text-[11px] text-zinc-400">({c.jenisKelamin})</span>
-                        </div>
-                        <div className="font-bold text-white text-xs sm:text-sm mt-1 break-words leading-snug">
-                          {c.nama}
-                        </div>
-                      </div>
+                </div>
 
-                      <div className="shrink-0 flex flex-col items-end">
-                        <div className="flex items-center bg-zinc-900 border border-zinc-700 focus-within:border-sky-400 rounded-lg px-2 py-1.5">
-                          <input
-                            type="number"
-                            step="0.1"
-                            key={`bb_${c.id}_${c.beratBadan}`}
-                            defaultValue={c.beratBadan || ""}
-                            placeholder="0"
-                            onBlur={(e) => handleSaveBbTb(c.id, "beratBadan", e.target.value)}
-                            className="w-14 sm:w-16 bg-transparent text-white text-center font-bold text-xs sm:text-sm focus:outline-none"
-                          />
-                          <span className="text-[11px] font-semibold text-zinc-400 pl-1">
-                            kg
-                          </span>
-                        </div>
-                        {saveIndicators[`${c.id}_beratBadan`] && (
-                          <span className="text-[10px] text-emerald-400 font-semibold mt-0.5">
-                            {saveIndicators[`${c.id}_beratBadan`]}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-zinc-950 text-zinc-400 uppercase sticky top-0 z-10">
+                      <tr>
+                        <th className="p-3 w-12">No</th>
+                        <th className="p-3">Kode</th>
+                        <th className="p-3">Nama Peserta</th>
+                        <th className="p-3">JK</th>
+                        <th className="p-3">{isBB ? "Berat Badan" : "Tinggi Badan"}</th>
+                        <th className="p-3 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {filteredCandidates.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-zinc-500">
+                            Belum ada peserta di sekolah ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredCandidates.map((c, idx) => (
+                          <tr key={`${field}_row_${c.id}`} className="hover:bg-zinc-950/60">
+                            <td className="p-3 text-zinc-500">{idx + 1}</td>
+                            <td className="p-3">
+                              <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${accent}`}>
+                                {c.kodePeserta}
+                              </span>
+                            </td>
+                            <td className="p-3 font-semibold text-white break-words">{c.nama}</td>
+                            <td className="p-3 text-zinc-400">{c.jenisKelamin}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`inline-flex items-center bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 ${
+                                    isBB ? "focus-within:border-sky-400" : "focus-within:border-amber-400"
+                                  }`}
+                                >
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    key={`${field}_${c.id}_${c[field]}`}
+                                    defaultValue={c[field] || ""}
+                                    placeholder="0"
+                                    onBlur={(e) => handleSaveBbTb(c.id, field, e.target.value)}
+                                    className="w-16 bg-transparent text-white text-center font-bold text-sm focus:outline-none"
+                                  />
+                                  <span className="text-[11px] font-semibold text-zinc-400 pl-1">{unit}</span>
+                                </div>
+                                {saveIndicators[`${c.id}_${field}`] && (
+                                  <span className="text-[10px] text-emerald-400 font-semibold">
+                                    {saveIndicators[`${c.id}_${field}`]}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => openEditCandidateModal(c)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition"
+                              >
+                                <Edit className="w-3.5 h-3.5" /> Edit
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-
-            {/* TABEL 2: INPUT TINGGI BADAN (TB) */}
-            <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 space-y-3.5 overflow-hidden">
-              <div className="border-b border-zinc-800 pb-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                  Tabel 2 • Real-Time Sync
-                </span>
-                <h3 className="text-sm sm:text-base font-bold text-white">
-                  Input Tinggi Badan (TB) — {activeSchool?.namaSekolah}
-                </h3>
-                <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Ketik angka TB (cm) lalu tekan Tab / klik luar untuk simpan otomatis.
-                </p>
-              </div>
-
-              <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
-                {filteredCandidates.length === 0 ? (
-                  <p className="text-zinc-500 text-xs py-8 text-center">
-                    Belum ada peserta di sekolah ini.
-                  </p>
-                ) : (
-                  filteredCandidates.map((c, idx) => (
-                    <div
-                      key={`tb_row_${c.id}`}
-                      className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-2.5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[11px] text-zinc-500 font-mono">#{idx + 1}</span>
-                          <span className="font-mono font-bold text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
-                            {c.kodePeserta}
-                          </span>
-                          <span className="text-[11px] text-zinc-400">({c.jenisKelamin})</span>
-                        </div>
-                        <div className="font-bold text-white text-xs sm:text-sm mt-1 break-words leading-snug">
-                          {c.nama}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex flex-col items-end">
-                        <div className="flex items-center bg-zinc-900 border border-zinc-700 focus-within:border-amber-400 rounded-lg px-2 py-1.5">
-                          <input
-                            type="number"
-                            step="0.1"
-                            key={`tb_${c.id}_${c.tinggiBadan}`}
-                            defaultValue={c.tinggiBadan || ""}
-                            placeholder="0"
-                            onBlur={(e) => handleSaveBbTb(c.id, "tinggiBadan", e.target.value)}
-                            className="w-14 sm:w-16 bg-transparent text-white text-center font-bold text-xs sm:text-sm focus:outline-none"
-                          />
-                          <span className="text-[11px] font-semibold text-zinc-400 pl-1">
-                            cm
-                          </span>
-                        </div>
-                        {saveIndicators[`${c.id}_tinggiBadan`] && (
-                          <span className="text-[10px] text-emerald-400 font-semibold mt-0.5">
-                            {saveIndicators[`${c.id}_tinggiBadan`]}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+            );
+          })()}
 
         {/* =================================================================== */}
         {/* TAB 2: REGISTRASI NAMA PESERTA                                      */}
@@ -1306,6 +1445,7 @@ export default function PpiRoadshow27Page() {
                       <th className="p-3">Kode</th>
                       <th className="p-3">Nama Peserta</th>
                       <th className="p-3">JK</th>
+                      <th className="p-3 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800">
@@ -1315,6 +1455,24 @@ export default function PpiRoadshow27Page() {
                         <td className="p-3 font-mono font-bold text-sky-400">{c.kodePeserta}</td>
                         <td className="p-3 font-semibold text-white">{c.nama}</td>
                         <td className="p-3 text-zinc-400">{c.jenisKelamin}</td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openEditCandidateModal(c)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold"
+                            >
+                              <Edit className="w-3.5 h-3.5" /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCandidate(c.id, c.nama)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 font-semibold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Hapus
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1392,21 +1550,19 @@ export default function PpiRoadshow27Page() {
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleAdminCandidateUpdate(c.id, { hasilLulus: true })}
-                            className={`px-2.5 py-1.5 rounded-lg font-bold transition ${
-                              c.hasilLulus
+                            className={`px-2.5 py-1.5 rounded-lg font-bold transition ${c.hasilLulus
                                 ? "bg-emerald-500 text-black"
                                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                            }`}
+                              }`}
                           >
                             Lulus
                           </button>
                           <button
                             onClick={() => handleAdminCandidateUpdate(c.id, { hasilLulus: false })}
-                            className={`px-2.5 py-1.5 rounded-lg font-bold transition ${
-                              !c.hasilLulus
+                            className={`px-2.5 py-1.5 rounded-lg font-bold transition ${!c.hasilLulus
                                 ? "bg-red-600 text-white"
                                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                            }`}
+                              }`}
                           >
                             Tidak
                           </button>
@@ -1417,11 +1573,10 @@ export default function PpiRoadshow27Page() {
                           onClick={() =>
                             handleAdminCandidateUpdate(c.id, { statusTayang: !c.statusTayang })
                           }
-                          className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-                            c.statusTayang
+                          className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${c.statusTayang
                               ? "bg-sky-500/20 border border-sky-500/40 text-sky-300"
                               : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                          }`}
+                            }`}
                         >
                           {c.statusTayang ? "Ditayangkan (Klik Hide)" : "Hidden"}
                         </button>
@@ -1488,11 +1643,10 @@ export default function PpiRoadshow27Page() {
               <button
                 type="button"
                 onClick={() => setPostsFilter("ALL")}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-                  postsFilter === "ALL"
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${postsFilter === "ALL"
                     ? "bg-white text-black"
                     : "bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800"
-                }`}
+                  }`}
               >
                 Semua Berita ({posts.length})
               </button>
@@ -1500,11 +1654,10 @@ export default function PpiRoadshow27Page() {
               <button
                 type="button"
                 onClick={() => setPostsFilter("SUDAH_DIKUNJUNGI")}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                  postsFilter === "SUDAH_DIKUNJUNGI"
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${postsFilter === "SUDAH_DIKUNJUNGI"
                     ? "bg-emerald-600 text-white"
                     : "bg-zinc-950 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/60"
-                }`}
+                  }`}
               >
                 <Check className="w-3.5 h-3.5 inline mr-0.5" />
                 <span>Sudah Dikunjungi</span>
@@ -1516,11 +1669,10 @@ export default function PpiRoadshow27Page() {
               <button
                 type="button"
                 onClick={() => setPostsFilter("AKAN_DIKUNJUNGI")}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                  postsFilter === "AKAN_DIKUNJUNGI"
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${postsFilter === "AKAN_DIKUNJUNGI"
                     ? "bg-sky-600 text-white"
                     : "bg-zinc-950 text-sky-400 hover:bg-sky-950/40 border border-sky-900/60"
-                }`}
+                  }`}
               >
                 <RefreshCw className="w-3.5 h-3.5 inline mr-0.5" />
                 <span>Akan Dikunjungi</span>
@@ -1557,11 +1709,10 @@ export default function PpiRoadshow27Page() {
                               className="w-full h-full object-cover"
                             />
                             <span
-                              className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                isSudah
+                              className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isSudah
                                   ? "bg-emerald-600 text-white"
                                   : "bg-sky-600 text-white"
-                              }`}
+                                }`}
                             >
                               {isSudah ? "Sudah Dikunjungi" : "Akan Dikunjungi"}
                             </span>
@@ -1681,7 +1832,118 @@ export default function PpiRoadshow27Page() {
       )}
 
       {/* ===================================================================== */}
-      {/* MODAL BUAT / EDIT BERITA & AGENDA KUNJUNGAN ROADSHOW                   */}
+      {/* MODAL EDIT DATA PESERTA (PANITIA, ADMIN ROADSHOW, SUPER ADMIN)        */}
+      {/* ===================================================================== */}
+      {editingCandidate && (
+        <div
+          onClick={() => !savingCandidateBusy && setEditingCandidate(null)}
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
+        >
+          <form
+            onSubmit={handleSaveCandidateEdit}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border border-zinc-700 rounded-3xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">
+                  {editingCandidate.kodePeserta}
+                </span>
+                <h3 className="text-base font-extrabold text-white mt-1">Edit Data Peserta</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCandidate(null)}
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                aria-label="Tutup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 mb-1">Nama Lengkap</label>
+              <input
+                type="text"
+                required
+                maxLength={100}
+                value={editCandidateNama}
+                onChange={(e) => setEditCandidateNama(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-sm focus:border-red-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 mb-1">Jenis Kelamin</label>
+              <select
+                value={editCandidateGender}
+                onChange={(e) => setEditCandidateGender(e.target.value as "Cowok" | "Cewek")}
+                className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-sm focus:border-red-500 focus:outline-none"
+              >
+                <option value="Cowok">Laki-laki (Putra)</option>
+                <option value="Cewek">Perempuan (Putri)</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">Berat Badan (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editCandidateBB}
+                  onChange={(e) => setEditCandidateBB(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-sm focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">Tinggi Badan (cm)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editCandidateTB}
+                  onChange={(e) => setEditCandidateTB(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-sm focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 mb-1">Catatan</label>
+              <textarea
+                rows={2}
+                maxLength={300}
+                value={editCandidateKet}
+                onChange={(e) => setEditCandidateKet(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-sm focus:border-red-500 focus:outline-none resize-none"
+              />
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+              <button
+                type="button"
+                disabled={savingCandidateBusy}
+                onClick={() => handleDeleteCandidate(editingCandidate.id, editingCandidate.nama)}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 text-xs font-bold disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Hapus Peserta
+              </button>
+              <button
+                type="submit"
+                disabled={savingCandidateBusy}
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+              >
+                {savingCandidateBusy ? "Menyimpan..." : "Simpan Perubahan"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL BUAT / EDIT BERITA &amp; AGENDA KUNJUNGAN ROADSHOW                   */}
       {/* ===================================================================== */}
       {postModalOpen && (
         <div

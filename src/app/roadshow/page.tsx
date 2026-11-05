@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useLive } from "@/lib/useLive";
 import Link from "next/link";
 
 interface PassedCandidate {
@@ -81,9 +82,10 @@ export default function PublicRoadshowPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Realtime: data yang dihapus / diubah di database langsung ikut berubah (~1 detik)
+  useLive(loadData, 1000);
 
   // Close dropdowns when clicking outside
   useEffect(() => {

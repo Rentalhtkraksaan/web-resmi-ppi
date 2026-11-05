@@ -7,6 +7,14 @@ let isSeeded = false;
 export async function ensureSeeded() {
   if (isSeeded) return;
   try {
+    // Seed data hanya dibuat SEKALI SAJA (saat database benar-benar baru).
+    // Setelah itu, data yang dihapus admin / langsung di database TIDAK akan muncul lagi.
+    const seededFlag = await prisma.systemFlag.findUnique({ where: { key: "seed_v1" } });
+    if (seededFlag) {
+      isSeeded = true;
+      return;
+    }
+
     // 1. Ensure default LandingConfig exists
     const configCount = await prisma.landingConfig.count();
     if (configCount === 0) {
@@ -425,6 +433,12 @@ export async function ensureSeeded() {
         ],
       });
     }
+
+    await prisma.systemFlag.upsert({
+      where: { key: "seed_v1" },
+      update: {},
+      create: { key: "seed_v1", value: new Date().toISOString() },
+    });
 
     isSeeded = true;
   } catch (err) {

@@ -259,3 +259,7 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ success: true });
 }
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
