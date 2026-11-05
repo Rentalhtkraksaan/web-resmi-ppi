@@ -128,3 +128,4 @@ export async function sendOtpEmail(toEmail: string, fullName: string, otpCode: s
     return false;
   }
 }
+

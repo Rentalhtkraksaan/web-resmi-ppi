@@ -226,13 +226,27 @@ export async function GET(req: NextRequest) {
   }
 
   // STRICT QR SCAN ENFORCEMENT FOR FIELD COMMITTEE (PANITIA):
-  // Field officers (!isAdminRoadshow) MUST scan Super Admin's QR code for a valid school first!
-  const hasAssignedValidSchool = Boolean(
-    session.assignedSchoolId && schools.some((s) => s.id === session.assignedSchoolId)
+  // Field officers (!isAdminRoadshow) MUST scan Super Admin's QR code for an ACTIVE ("Hari Ini") school!
+  const assignedSchool = session.assignedSchoolId
+    ? schools.find((s) => s.id === session.assignedSchoolId)
+    : null;
+
+  // School is strictly valid ONLY if it exists AND its status is "Hari Ini"
+  const isAssignedSchoolActive = Boolean(
+    assignedSchool && assignedSchool.statusPenilaian === "Hari Ini"
   );
+  const hasAssignedValidSchool = Boolean(session.assignedSchoolId && isAssignedSchoolActive);
   const qrVerified = isAdminRoadshow || hasAssignedValidSchool;
 
   if (!qrVerified) {
+    // If panitia was previously assigned to a school that is now closed or inactive, auto-disconnect ("kepental")
+    if (session.assignedSchoolId && !isAdminRoadshow) {
+      await prisma.userAccount.update({
+        where: { id: session.userId },
+        data: { assignedSchoolId: null },
+      }).catch(() => {});
+    }
+
     return NextResponse.json({
       schools: [],
       activeSchoolId: "",
@@ -250,10 +264,6 @@ export async function GET(req: NextRequest) {
       },
     });
   }
-
-  const assignedSchool = session.assignedSchoolId
-    ? schools.find((s) => s.id === session.assignedSchoolId)
-    : null;
 
   const effectiveSchoolId = isAdminRoadshow
     ? schoolId || session.assignedSchoolId || todaySchool?.id || schools[0]?.id || ""
@@ -339,6 +349,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Sekolah pada QR tidak ditemukan di database." },
         { status: 404 }
+      );
+    }
+
+    if (school.statusPenilaian !== "Hari Ini") {
+      return NextResponse.json(
+        {
+          error: `QR Code untuk sekolah ${school.namaSekolah} sudah TIDAK AKTIF / SESI ROADSHOW SELESAI. Silakan minta Super Admin membuka sesi atau scan QR sekolah yang aktif hari ini.`,
+        },
+        { status: 403 }
       );
     }
 
@@ -442,9 +461,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sekolah tidak ditemukan." }, { status: 404 });
     }
     if (!isAdminRoadshow) {
-      if (session.assignedSchoolId !== school.id) {
+      if (session.assignedSchoolId !== school.id || school.statusPenilaian !== "Hari Ini") {
+        await prisma.userAccount.update({
+          where: { id: session.userId },
+          data: { assignedSchoolId: null },
+        }).catch(() => {});
         return NextResponse.json(
-          { error: "Wajib Scan QR Code Resmi Super Admin terlebih dahulu untuk membuka akses sekolah ini!" },
+          { error: "Sesi roadshow sekolah ini telah ditutup / tidak aktif! Akses terputus, silakan scan ulang QR code sekolah yang aktif." },
           { status: 403 }
         );
       }
@@ -515,6 +538,12 @@ export async function POST(req: NextRequest) {
         documentationLocation: lokasi,
         closedAt: new Date(),
       },
+    });
+
+    // Otomatis putuskan ("kepental") seluruh panitia lapangan yang sedang terhubung ke sekolah ini
+    await prisma.userAccount.updateMany({
+      where: { assignedSchoolId: schoolId },
+      data: { assignedSchoolId: null },
     });
 
     // Otomatis terbitkan ke Kegiatan PPI Roadshow di Landing Page (ROADSHOW_GALLERY)
@@ -661,8 +690,12 @@ export async function PUT(req: NextRequest) {
         session.assignedSchoolId !== candidate.schoolId ||
         candidate.school.statusPenilaian !== "Hari Ini"
       ) {
+        await prisma.userAccount.update({
+          where: { id: session.userId },
+          data: { assignedSchoolId: null },
+        }).catch(() => {});
         return NextResponse.json(
-          { error: "Wajib Scan QR Code Resmi Super Admin terlebih dahulu untuk menginput BB / TB!" },
+          { error: "Sesi roadshow sekolah ini telah ditutup / tidak aktif! Akses terputus, silakan scan ulang QR code sekolah yang aktif." },
           { status: 403 }
         );
       }
@@ -761,9 +794,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Peserta tidak ditemukan." }, { status: 404 });
     }
 
-    if (!isAdminRoadshow && session.assignedSchoolId !== existing.schoolId) {
+    if (!isAdminRoadshow && (session.assignedSchoolId !== existing.schoolId || existing.school.statusPenilaian !== "Hari Ini")) {
+      await prisma.userAccount.update({
+        where: { id: session.userId },
+        data: { assignedSchoolId: null },
+      }).catch(() => {});
       return NextResponse.json(
-        { error: "Anda hanya memiliki akses untuk memperbarui data peserta di sekolah penugasan Anda." },
+        { error: "Sesi roadshow sekolah ini telah ditutup / tidak aktif! Akses terputus, silakan scan ulang QR code sekolah yang aktif." },
         { status: 403 }
       );
     }
@@ -878,6 +915,12 @@ export async function PUT(req: NextRequest) {
       data: { statusPenilaian: "Hari Ini" },
     });
 
+    // Otomatis putuskan seluruh panitia yang sebelumnya terhubung ke sekolah lain
+    await prisma.userAccount.updateMany({
+      where: { assignedSchoolId: { not: schoolId } },
+      data: { assignedSchoolId: null },
+    });
+
     await prisma.securityAuditLog.create({
       data: {
         actorName: session.fullName,
@@ -907,6 +950,16 @@ export async function PUT(req: NextRequest) {
       await prisma.roadshowSchool.updateMany({
         where: { id: { not: schoolId } },
         data: { statusPenilaian: "Ditutup" },
+      });
+      await prisma.userAccount.updateMany({
+        where: { assignedSchoolId: { not: schoolId } },
+        data: { assignedSchoolId: null },
+      });
+    } else {
+      // Jika statusnya dimatikan/ditutup, langsung putuskan panitia yang terhubung
+      await prisma.userAccount.updateMany({
+        where: { assignedSchoolId: schoolId },
+        data: { assignedSchoolId: null },
       });
     }
 

@@ -172,18 +172,32 @@ export default function PpiRoadshow27Page() {
       const rsRes = await fetch(`/api/roadshow?mode=internal${q}`, { cache: "no-store" });
       if (rsRes.ok) {
         const rsData = await rsRes.json();
-        setSchools(rsData.schools || []);
-        if (!sid && rsData.activeSchoolId) {
-          setActiveSchoolId(rsData.activeSchoolId);
-        }
-        setCandidates(rsData.candidates || []);
         const adminAccess = Boolean(rsData.access?.isAdminRoadshow) || isManagerUser;
         setIsAdminRoadshow(adminAccess);
-        setQrVerified(Boolean(rsData.qrVerified) || adminAccess);
+        const verified = Boolean(rsData.qrVerified) || adminAccess;
+        setQrVerified(verified);
+
+        if (!verified && !adminAccess) {
+          // Panitia otomatis kepental dari sekolah yang ditutup / QR mati
+          setActiveSchoolId("");
+          setCandidates([]);
+          setSchools([]);
+        } else {
+          setSchools(rsData.schools || []);
+          if (!sid && rsData.activeSchoolId) {
+            setActiveSchoolId(rsData.activeSchoolId);
+          }
+          setCandidates(rsData.candidates || []);
+        }
 
         if (isInitial) {
           setActiveTab(adminAccess ? "ADMIN_PANEL" : "TABEL_BB");
         }
+      } else if (rsRes.status === 403 && !isManagerUser) {
+        setQrVerified(false);
+        setActiveSchoolId("");
+        setCandidates([]);
+        setSchools([]);
       }
 
       // Load Roadshow Posts
@@ -665,6 +679,11 @@ export default function PpiRoadshow27Page() {
     const data = await res.json();
     if (!res.ok) {
       alert(data.error || "Gagal mendaftarkan peserta");
+      if (res.status === 403 && !isAdminRoadshow) {
+        setQrVerified(false);
+        setActiveSchoolId("");
+        setCandidates([]);
+      }
       return;
     }
     setRegNama("");
@@ -697,6 +716,12 @@ export default function PpiRoadshow27Page() {
     } else {
       const errData = await res.json().catch(() => ({}));
       setSaveIndicators((prev) => ({ ...prev, [key]: errData.error || "Gagal" }));
+      if (res.status === 403 && !isAdminRoadshow) {
+        alert(errData.error || "Sesi roadshow untuk sekolah ini telah ditutup/selesai. Silakan scan ulang QR sekolah yang aktif.");
+        setQrVerified(false);
+        setActiveSchoolId("");
+        setCandidates([]);
+      }
     }
   };
 

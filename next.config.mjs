@@ -4,6 +4,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async redirects() {
+    return [
+      {
+        source: "/sign-in",
+        destination: "/sign-up",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
