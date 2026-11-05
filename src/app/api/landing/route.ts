@@ -9,7 +9,7 @@ import {
   RolePermissions,
   sanitizeString,
 } from "@/lib/security";
-import { firebaseGet, firebasePush, firebasePut, ROADSHOW_RTDB_URL, UMUM_RTDB_URL } from "@/lib/firebase";
+import { firebaseDelete, firebaseGet, firebasePush, UMUM_RTDB_URL } from "@/lib/firebase";
 
 // Helper: Safely delete physical file from /uploads/ directory (BUG-HUNTER-05)
 async function deleteUploadedFile(fileUrl?: string | null) {
@@ -92,56 +92,40 @@ export async function GET() {
     }),
   ]);
 
-  // Sync with persistent Cloud RTDB to ensure reviews are never lost across Vercel Lambda container recycles
-  let mergedReviews = [...reviews];
+  // Load authoritative reviews from Firebase RTDB (paskab-c3eb4)
+  // If an entry was deleted in Firebase Console, it stays deleted and is NEVER resurrected
+  let finalReviews: any[] = [];
   try {
-    const [roadshowData, umumData] = await Promise.all([
-      firebaseGet<Record<string, any>>(ROADSHOW_RTDB_URL, "penilaian"),
-      firebaseGet<Record<string, any>>(UMUM_RTDB_URL, "penilaian"),
-    ]);
-
-    const combinedRtdb = { ...(roadshowData || {}), ...(umumData || {}) };
-
-    if (Object.keys(combinedRtdb).length > 0) {
-      const existingSigs = new Set(
-        mergedReviews.map((r) => `${r.nama.trim().toLowerCase()}_${r.pesan.trim().toLowerCase()}`)
-      );
-
-      for (const [key, val] of Object.entries(combinedRtdb)) {
+    const umumData = await firebaseGet<Record<string, any>>(UMUM_RTDB_URL, "penilaian");
+    if (umumData && typeof umumData === "object" && Object.keys(umumData).length > 0) {
+      for (const [key, val] of Object.entries(umumData)) {
         if (val && typeof val === "object" && (val as any).nama && (val as any).pesan) {
           const v = val as any;
-          const sig = `${String(v.nama).trim().toLowerCase()}_${String(v.pesan).trim().toLowerCase()}`;
-
-          if (!existingSigs.has(sig)) {
-            existingSigs.add(sig);
-            mergedReviews.unshift({
-              id: `rtdb_${key}`,
-              nama: String(v.nama),
-              kategori: v.kategori === "ppi" ? "ppi" : "umum",
-              angkatan: String(v.angkatan || "-"),
-              rating: Number(v.rating) || 5,
-              pesan: String(v.pesan),
-              source: "LANDING",
-              isVisible: true,
-              createdAt: v.createdAt ? new Date(v.createdAt) : new Date(),
-            } as any);
-          }
-
-          // Mirror to paskab-c3eb4 if it was missing there
-          if (!umumData || !umumData[key]) {
-            firebasePut(UMUM_RTDB_URL, `penilaian/${key}`, v).catch(() => {});
-          }
+          finalReviews.push({
+            id: key,
+            nama: String(v.nama || ""),
+            kategori: v.kategori === "ppi" ? "ppi" : "umum",
+            angkatan: v.kategori === "ppi" ? String(v.angkatan || "-") : "-",
+            rating: Number(v.rating) || 5,
+            pesan: String(v.pesan || ""),
+            source: v.source || "LANDING",
+            isVisible: true,
+            createdAt: v.createdAt || (v.waktu ? new Date(v.waktu).toISOString() : new Date().toISOString()),
+          });
         }
       }
+      finalReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else {
+      finalReviews = reviews;
     }
   } catch {
-    // non-fatal fallback
+    finalReviews = reviews;
   }
 
   return NextResponse.json({
     config,
     items,
-    reviews: mergedReviews,
+    reviews: finalReviews,
   });
 }
 
@@ -213,10 +197,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    await Promise.allSettled([
-      firebasePush(ROADSHOW_RTDB_URL, "penilaian", rtdbPayload),
-      firebasePush(UMUM_RTDB_URL, "penilaian", rtdbPayload),
-    ]);
+    await firebasePush(UMUM_RTDB_URL, "penilaian", rtdbPayload);
 
     return NextResponse.json({ success: true, review: created });
   }
@@ -439,7 +420,11 @@ export async function DELETE(req: NextRequest) {
     if (!perms.manageReviews && !perms.manageLanding) {
       return NextResponse.json({ error: "Tidak memiliki izin menghapus ulasan." }, { status: 403 });
     }
-    await prisma.review.delete({ where: { id } });
+    const cleanKey = id.replace(/^rtdb_/, "");
+    await Promise.allSettled([
+      firebaseDelete(UMUM_RTDB_URL, `penilaian/${cleanKey}`),
+      prisma.review.delete({ where: { id } }).catch(() => {}),
+    ]);
     await prisma.securityAuditLog.create({
       data: {
         actorName: session.fullName,
@@ -447,7 +432,7 @@ export async function DELETE(req: NextRequest) {
         action: "DELETE_REVIEW",
         details: `Menghapus ulasan ID ${id}`,
       },
-    });
+    }).catch(() => {});
     return NextResponse.json({ success: true });
   }
 

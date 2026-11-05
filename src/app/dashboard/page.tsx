@@ -1737,8 +1737,21 @@ export default function DashboardPage() {
                     className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex items-center justify-between gap-4"
                   >
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <strong className="text-xs font-bold text-slate-900">{r.nama}</strong>
+                        {r.kategori === "ppi" ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                            {r.angkatan && r.angkatan !== "-"
+                              ? (String(r.angkatan).toLowerCase().startsWith("ppi")
+                                  ? String(r.angkatan).toUpperCase()
+                                  : `PPI-${r.angkatan}`)
+                              : "PPI"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200 text-slate-700">
+                            Umum
+                          </span>
+                        )}
                         <span className="text-xs text-amber-500 font-bold">★ {r.rating}/5</span>
                       </div>
                       <p className="text-xs text-slate-600 mt-1">&ldquo;{r.pesan}&rdquo;</p>

@@ -860,9 +860,24 @@ export default function LandingPage() {
                   className="bg-zinc-900/90 p-5 rounded-2xl border border-zinc-800/90 flex flex-col justify-between gap-3 text-left"
                 >
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <strong className="text-white text-xs font-semibold">{item.nama}</strong>
-                      <span className="text-amber-400 text-xs font-bold">★ {item.rating}.0</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <strong className="text-white text-xs font-semibold truncate">{item.nama}</strong>
+                        {item.kategori === "ppi" ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-500/40">
+                            {item.angkatan && item.angkatan !== "-"
+                              ? (String(item.angkatan).toLowerCase().startsWith("ppi")
+                                  ? String(item.angkatan).toUpperCase()
+                                  : `PPI-${item.angkatan}`)
+                              : "PPI"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/60">
+                            Umum
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-amber-400 text-xs font-bold shrink-0">★ {Number(item.rating || 5).toFixed(1)}</span>
                     </div>
                     <p className="text-zinc-300 text-xs leading-relaxed">&ldquo;{item.pesan}&rdquo;</p>
                   </div>
