@@ -15,6 +15,7 @@ import {
   verifySignedCaptcha,
 } from "@/lib/security";
 import { firebasePush, ROADSHOW_RTDB_URL, UMUM_RTDB_URL } from "@/lib/firebase";
+import { sendOtpEmail, sendWelcomeEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   // Fast path: Endpoint to obtain cryptographically signed Captcha for client form
@@ -438,6 +439,11 @@ export async function POST(req: NextRequest) {
       },
     }).catch(() => {});
 
+    // Kirim notifikasi email selamat datang secara async (non-blocking)
+    sendWelcomeEmail(newUser.email, newUser.fullName, newUser.username).catch((e) =>
+      console.warn("Gagal mengirim welcome email:", e)
+    );
+
     return response;
   }
 
@@ -660,6 +666,117 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+  }
+
+  // =========================================================================
+  // ACTION: REQUEST OTP LUPA PASSWORD
+  // =========================================================================
+  if (action === "request_forgot_otp") {
+    const rawEmail = String(body.email || "").trim().toLowerCase();
+    if (!rawEmail) {
+      return NextResponse.json({ error: "Silakan masukkan alamat email Anda." }, { status: 400 });
+    }
+
+    // Periksa apakah email terdaftar di database
+    const user = await prisma.userAccount.findFirst({
+      where: { email: rawEmail },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Alamat email ini tidak terdaftar dalam sistem PPI." },
+        { status: 404 }
+      );
+    }
+
+    // Buat kode OTP acak 6 digit
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 menit
+    const otpPayload = JSON.stringify({ email: rawEmail, code: otpCode, expiresAt });
+
+    // Simpan di SystemFlag sebagai key otp_<email>
+    await prisma.systemFlag.upsert({
+      where: { key: `otp_${rawEmail}` },
+      update: { value: otpPayload },
+      create: { key: `otp_${rawEmail}`, value: otpPayload },
+    });
+
+    // Kirim OTP via email
+    await sendOtpEmail(rawEmail, user.fullName, otpCode);
+
+    return NextResponse.json({
+      success: true,
+      message: `Kode OTP 6 digit berhasil dikirim ke ${rawEmail}. Silakan periksa inbox/spam email Anda.`,
+    });
+  }
+
+  // =========================================================================
+  // ACTION: RESET PASSWORD VIA OTP
+  // =========================================================================
+  if (action === "verify_reset_password_otp") {
+    const rawEmail = String(body.email || "").trim().toLowerCase();
+    const otpInput = String(body.otp || "").trim();
+    const newPassword = String(body.newPassword || "");
+
+    if (!rawEmail || !otpInput || !newPassword) {
+      return NextResponse.json({ error: "Email, kode OTP, dan password baru wajib diisi." }, { status: 400 });
+    }
+
+    // Validasi kekuatan password
+    if (newPassword.length < 8) {
+      return NextResponse.json({ error: "Password baru minimal 8 karakter." }, { status: 400 });
+    }
+
+    // Baca data OTP dari SystemFlag
+    const flag = await prisma.systemFlag.findUnique({
+      where: { key: `otp_${rawEmail}` },
+    });
+
+    if (!flag) {
+      return NextResponse.json({ error: "Kode OTP tidak valid atau belum diminta." }, { status: 400 });
+    }
+
+    let parsedOtp: { email: string; code: string; expiresAt: number };
+    try {
+      parsedOtp = JSON.parse(flag.value);
+    } catch {
+      return NextResponse.json({ error: "Data OTP rusak. Silakan minta kode baru." }, { status: 400 });
+    }
+
+    if (parsedOtp.expiresAt < Date.now()) {
+      return NextResponse.json({ error: "Kode OTP telah kedaluwarsa. Silakan minta kode OTP baru." }, { status: 400 });
+    }
+
+    if (parsedOtp.code !== otpInput) {
+      return NextResponse.json({ error: "Kode OTP yang Anda masukkan salah!" }, { status: 400 });
+    }
+
+    // Update password di UserAccount
+    const newHash = hashPassword(newPassword);
+    await prisma.userAccount.updateMany({
+      where: { email: rawEmail },
+      data: { passwordHash: newHash },
+    });
+
+    // Hapus kode OTP agar tidak bisa dipakai ulang
+    await prisma.systemFlag.delete({
+      where: { key: `otp_${rawEmail}` },
+    }).catch(() => {});
+
+    await prisma.securityAuditLog.create({
+      data: {
+        actorName: rawEmail,
+        actorRole: "USER",
+        action: "RESET_PASSWORD_SUCCESS",
+        details: `Reset password akun via OTP email berhasil`,
+        ipAddress: ip,
+      },
+    }).catch(() => {});
+
+    return NextResponse.json({
+      success: true,
+      message: "Password Anda berhasil diperbarui! Silakan login dengan password baru.",
+    });
   }
 
   // =========================================================================

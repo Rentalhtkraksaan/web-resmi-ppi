@@ -113,8 +113,15 @@ export default function PaskibrakaAuthSplit({
   const isCaptchaFilled = captchaInput.trim().length >= 4;
   const isStep2Valid = isEmailClean && isPhoneClean && isPasswordValid && isCaptchaFilled && !dupStatus.checking;
 
-  // Modal Forgot Password
+  // Modal Forgot Password with Email OTP Verification
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1); // 1: Input Email -> 2: Input OTP & Password Baru
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   // Initialize & Refresh Server-Validated Captcha (BUG-HUNTER-01)
   const refreshCaptcha = async () => {
@@ -347,14 +354,13 @@ export default function PaskibrakaAuthSplit({
 
       await showSuccess(
         "Pendaftaran Berhasil!",
-        `Selamat datang, ${data.user.fullName}! Akun anggota PPI Akt. ${data.user.angkatan} berhasil didaftarkan.`
+        `Selamat datang, ${data.user.fullName}! Akun anggota PPI Anda berhasil dibuat. Notifikasi pendaftaran juga dikirimkan ke email ${data.user.email}.`
       );
 
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        window.location.href = redirectUrl;
-      }
+      // Arahkan ke halaman login
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1500);
     } catch {
       setRegError("Terjadi gangguan jaringan saat mendaftar. Silakan coba lagi.");
       refreshCaptcha();
@@ -367,9 +373,8 @@ export default function PaskibrakaAuthSplit({
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#f8fafc] text-slate-800 relative overflow-x-hidden">
       {/* ===================================================================== */}
       {/* PANEL KIRI: ALA-ALA PASKIBRAKA / PPI KABUPATEN PROBOLINGGO            */}
-      {/* (GRADIENT MERAH MARUN/CRIMSON, LOGO PPI, NARRATIF RESMI, DEKORATIF)  */}
       {/* ===================================================================== */}
-      <div className="w-full lg:w-[38%] min-h-[220px] sm:min-h-[280px] lg:min-h-screen bg-gradient-to-br from-[#800000] via-[#9e0b1c] to-[#580009] text-white flex flex-col items-center justify-center p-5 sm:p-10 lg:p-12 relative overflow-hidden shrink-0 shadow-2xl">
+      <div className="w-full lg:w-[38%] py-8 sm:py-12 lg:min-h-screen bg-gradient-to-br from-[#800000] via-[#9e0b1c] to-[#580009] text-white flex flex-col items-center justify-center p-4 sm:p-10 lg:p-12 relative overflow-hidden shrink-0 shadow-2xl">
         {/* Subtle Decorative Background Circles & Rings ala Govt Modern */}
         <div className="absolute -top-20 -left-20 w-80 h-80 rounded-full border border-white/10 pointer-events-none" />
         <div className="absolute -top-10 -left-10 w-96 h-96 rounded-full border border-white/5 pointer-events-none" />
@@ -384,43 +389,43 @@ export default function PaskibrakaAuthSplit({
         />
 
         {/* Center Content: Logo & Title Resmi (Clean, Minimalist, Centered) */}
-        <div className="relative z-10 my-auto py-6 lg:py-0 flex flex-col items-center justify-center text-center max-w-sm mx-auto">
+        <div className="relative z-10 my-auto py-2 lg:py-0 flex flex-col items-center justify-center text-center max-w-sm mx-auto">
           {/* Logo PPI Official with Gold & White Ring */}
-          <div className="relative mb-4 sm:mb-6 flex flex-col items-center">
-            <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full p-1.5 bg-gradient-to-tr from-amber-400 via-white to-amber-300 shadow-2xl shadow-black/40 flex items-center justify-center">
+          <div className="relative mb-3 sm:mb-6 flex flex-col items-center">
+            <div className="w-16 h-16 sm:w-28 sm:h-28 rounded-full p-1 sm:p-1.5 bg-gradient-to-tr from-amber-400 via-white to-amber-300 shadow-2xl shadow-black/40 flex items-center justify-center">
               <img
                 src="/logo.jpg"
                 alt="Logo Purna Paskibraka Indonesia"
                 className="w-full h-full object-cover rounded-full bg-zinc-950"
               />
             </div>
-            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-amber-400 text-black text-[10px] font-extrabold uppercase tracking-widest shadow-md whitespace-nowrap">
+            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-amber-400 text-black text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest shadow-md whitespace-nowrap">
               PPI KAB. PROB
             </span>
           </div>
 
           {/* Heading Resmi PPI */}
-          <h1 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight text-center">
+          <h1 className="text-lg sm:text-3xl font-extrabold text-white tracking-tight leading-tight text-center">
             Purna Paskibraka Indonesia
           </h1>
-          <p className="text-sm sm:text-lg font-bold text-amber-300 mt-1 text-center">
+          <p className="text-xs sm:text-lg font-bold text-amber-300 mt-0.5 sm:mt-1 text-center">
             Kabupaten Probolinggo
           </p>
 
-          <div className="w-16 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 rounded-full my-3 sm:my-4 mx-auto" />
+          <div className="w-12 sm:w-16 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 rounded-full my-2 sm:my-4 mx-auto" />
         </div>
       </div>
 
       {/* ===================================================================== */}
       {/* PANEL KANAN: FORM LOGIN & DAFTAR (CLEAN ALA DISHUB, LIGHT & MODERN)  */}
       {/* ===================================================================== */}
-      <div className="w-full lg:w-[62%] min-h-screen flex flex-col justify-between p-4 sm:p-8 lg:p-14 relative bg-[#f8fafc] overflow-hidden">
+      <div className="w-full lg:w-[62%] min-h-screen flex flex-col justify-between p-3.5 sm:p-8 lg:p-14 relative bg-[#f8fafc] overflow-hidden">
         {/* Soft Decorative Ambient Top-Right Blob */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-red-100/60 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         <div className="absolute bottom-0 right-10 w-72 h-72 bg-amber-100/50 rounded-full blur-3xl pointer-events-none" />
 
         {/* Center Main Card Form */}
-        <div className="max-w-md w-full mx-auto my-auto relative z-10 bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-8 shadow-xl shadow-slate-200/50">
+        <div className="max-w-md w-full mx-auto my-auto relative z-10 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-8 shadow-xl shadow-slate-200/50">
           {authMode === "LOGIN" ? (
             /* =============================================================== */
             /* MODE 1: LOGIN ADMIN / PANITIA (SESUAI DOKUMEN DISHUB)           */
@@ -687,12 +692,12 @@ export default function PaskibrakaAuthSplit({
                   </button>
                 </div>
 
-                {/* Switch to Register via /sign-in */}
+                {/* Switch to Register via /sign-up */}
                 <div className="text-center pt-4 border-t border-slate-100">
                   <p className="text-xs text-slate-500">
                     Belum memiliki akun PPI?{" "}
                     <Link
-                      href="/sign-in"
+                      href="/sign-up"
                       className="text-red-600 hover:text-red-700 font-bold hover:underline"
                     >
                       Daftar Akun Baru →
@@ -830,7 +835,11 @@ export default function PaskibrakaAuthSplit({
                         setRegError(null);
                         setRegStep(2);
                       }}
-                      className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs transition shadow-md shadow-red-600/30 flex items-center justify-center gap-1.5"
+                      className={`w-full py-2.5 rounded-xl text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-1.5 ${
+                        isStep1Valid
+                          ? "bg-red-600 hover:bg-red-500 shadow-red-600/30 cursor-pointer"
+                          : "bg-red-300 opacity-60 cursor-not-allowed"
+                      }`}
                     >
                       <span>Lanjut Step 2</span>
                       <span>→</span>
@@ -1070,7 +1079,11 @@ export default function PaskibrakaAuthSplit({
                     <button
                       type="submit"
                       disabled={!isStep2Valid || regBusy}
-                      className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs transition shadow-md shadow-red-600/30 flex items-center justify-center gap-1.5"
+                      className={`w-full py-2.5 rounded-xl text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-1.5 ${
+                        isStep2Valid && !regBusy
+                          ? "bg-red-600 hover:bg-red-500 shadow-red-600/30 cursor-pointer"
+                          : "bg-red-300 opacity-60 cursor-not-allowed"
+                      }`}
                     >
                       {regBusy ? "Mendaftarkan..." : "Daftar Akun Sekarang ✓"}
                     </button>
@@ -1089,40 +1102,186 @@ export default function PaskibrakaAuthSplit({
         </div>
       </div>
 
-      {/* MODAL LUPA PASSWORD */}
+      {/* MODAL LUPA PASSWORD (RESET PASSWORD VIA OTP GMAIL) */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-slate-800 space-y-4 shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center mx-auto text-xl font-bold">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto text-xl font-bold">
               🔑
             </div>
             <div className="text-center">
-              <h3 className="text-base font-bold text-slate-900">Bantuan Lupa Password</h3>
+              <h3 className="text-base font-bold text-slate-900">Reset Password Akun PPI</h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Untuk keamanan data calon paskibraka, reset password panitia hanya dapat dilakukan
-                oleh Super Admin resmi PPI Kabupaten Probolinggo.
+                {forgotStep === 1
+                  ? "Masukkan alamat email yang terdaftar untuk menerima kode verifikasi OTP 6 digit."
+                  : `Kode OTP telah dikirim ke ${forgotEmail}. Masukkan kode dan buat password baru.`}
               </p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 space-y-1">
-              <div>
-                <strong>Helpdesk Panitia / Admin WhatsApp:</strong>
+
+            {forgotError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
+                {forgotError}
               </div>
-              <a
-                href="https://wa.me/6285176871609?text=Halo%20Admin%20PPI,%20saya%20butuh%20bantuan%20reset%20password%20panitia"
-                target="_blank"
-                rel="noreferrer"
-                className="text-sky-600 hover:underline font-semibold block"
+            )}
+
+            {forgotMessage && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+                {forgotMessage}
+              </div>
+            )}
+
+            {forgotStep === 1 ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!forgotEmail.trim()) return;
+                  setForgotBusy(true);
+                  setForgotError(null);
+                  setForgotMessage(null);
+                  try {
+                    const res = await fetch("/api/auth", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        action: "request_forgot_otp",
+                        email: forgotEmail.trim(),
+                      }),
+                    });
+                    const d = await res.json();
+                    if (!res.ok) {
+                      setForgotError(d.error || "Gagal mengirim kode OTP.");
+                    } else {
+                      setForgotMessage(d.message);
+                      setForgotStep(2);
+                    }
+                  } catch {
+                    setForgotError("Gangguan jaringan saat menghubungi server.");
+                  } finally {
+                    setForgotBusy(false);
+                  }
+                }}
+                className="space-y-3"
               >
-                0851-7687-1609 (Helpdesk Panitia PPI)
-              </a>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowForgotModal(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition"
-            >
-              Tutup
-            </button>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email Terdaftar <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="nama@gmail.com"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotModal(false);
+                      setForgotStep(1);
+                      setForgotError(null);
+                      setForgotMessage(null);
+                    }}
+                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotBusy}
+                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 text-white text-xs font-bold shadow-md shadow-red-600/30"
+                  >
+                    {forgotBusy ? "Mengirim..." : "Kirim OTP →"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!forgotOtp.trim() || !forgotNewPassword) return;
+                  setForgotBusy(true);
+                  setForgotError(null);
+                  try {
+                    const res = await fetch("/api/auth", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        action: "verify_reset_password_otp",
+                        email: forgotEmail.trim(),
+                        otp: forgotOtp.trim(),
+                        newPassword: forgotNewPassword,
+                      }),
+                    });
+                    const d = await res.json();
+                    if (!res.ok) {
+                      setForgotError(d.error || "Gagal memperbarui password.");
+                    } else {
+                      await showSuccess("Berhasil!", d.message);
+                      setShowForgotModal(false);
+                      setForgotStep(1);
+                      setForgotOtp("");
+                      setForgotNewPassword("");
+                    }
+                  } catch {
+                    setForgotError("Gangguan jaringan saat menghubungi server.");
+                  } finally {
+                    setForgotBusy(false);
+                  }
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Kode OTP 6 Digit <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                    placeholder="Contoh: 123456"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-center tracking-widest text-sm font-bold focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Password Baru <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    placeholder="Minimal 8 karakter..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep(1)}
+                    className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                  >
+                    ← Kembali
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotBusy}
+                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 text-white text-xs font-bold shadow-md shadow-red-600/30"
+                  >
+                    {forgotBusy ? "Menyimpan..." : "Simpan Password ✓"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
