@@ -702,7 +702,16 @@ export async function POST(req: NextRequest) {
     });
 
     // Kirim OTP via email
-    await sendOtpEmail(rawEmail, user.fullName, otpCode);
+    const emailSent = await sendOtpEmail(rawEmail, user.fullName, otpCode);
+    if (!emailSent) {
+      return NextResponse.json(
+        {
+          error:
+            "Gagal mengirim email OTP! Konfigurasi SMTP (SMTP_USER & SMTP_PASS) belum dipasang di environment server (Vercel).",
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
