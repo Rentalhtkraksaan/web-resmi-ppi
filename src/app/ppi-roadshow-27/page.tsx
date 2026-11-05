@@ -6,6 +6,23 @@ import QRCode from "qrcode";
 import jsQR from "jsqr";
 import PaskibrakaAuthSplit from "@/components/PaskibrakaAuthSplit";
 import { showConfirm, showError, showSuccess, showWarning } from "@/lib/swal";
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  CheckCircle,
+  FileText,
+  Lock,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Search,
+  Shield,
+  ShieldAlert,
+  Trash2,
+  X,
+  Upload,
+} from "lucide-react";
 
 interface RoadshowSchool {
   id: string;
@@ -115,13 +132,6 @@ export default function PpiRoadshow27Page() {
 
   // Real-time Save Status Map
   const [saveIndicators, setSaveIndicators] = useState<Record<string, string>>({});
-
-  // Logout Modal with 5-Second Skip Countdown (Rating NOT Mandatory after 5s)
-  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-  const [logoutCountdown, setLogoutCountdown] = useState(5);
-  const [logoutRating, setLogoutRating] = useState(5);
-  const [logoutPesan, setLogoutPesan] = useState("");
-  const [logoutBusy, setLogoutBusy] = useState(false);
 
   const loadRoadshowData = async (targetSchoolId?: string, isInitial = false) => {
     try {
@@ -367,16 +377,6 @@ export default function PpiRoadshow27Page() {
       .catch(() => setQrDataUrl(""));
   }, [qrModalSchool]);
 
-  // 5-Second Countdown Timer when Logout Modal is opened
-  useEffect(() => {
-    if (!logoutModalOpen) return;
-    setLogoutCountdown(5);
-    const interval = setInterval(() => {
-      setLogoutCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [logoutModalOpen]);
-
   // AUTO-START CAMERA FOR PANITIA WHEN LOGGED IN & NOT YET QR-VERIFIED!
   useEffect(() => {
     if (!user || isAdminRoadshow || qrVerified) {
@@ -393,30 +393,52 @@ export default function PpiRoadshow27Page() {
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           setCameraError(
-            "Browser ini tidak mendukung akses kamera langsung. Gunakan tombol 'Scan dari Foto / Galeri QR' di bawah."
+            "Browser ini tidak mendukung akses kamera langsung. Silakan gunakan opsi pilih file QR di bawah."
           );
           return;
         }
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        });
+
+        const constraintsList: MediaStreamConstraints[] = [
+          { video: { facingMode: { ideal: "environment" } }, audio: false },
+          { video: { facingMode: "environment" }, audio: false },
+          { video: true, audio: false },
+        ];
+
+        let streamAcquired: MediaStream | null = null;
+        for (const constraints of constraintsList) {
+          try {
+            streamAcquired = await navigator.mediaDevices.getUserMedia(constraints);
+            if (streamAcquired) break;
+          } catch {
+            // try next
+          }
+        }
+
+        if (!streamAcquired) {
+          setCameraError(
+            "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau unggah file QR di bawah."
+          );
+          return;
+        }
+
+        stream = streamAcquired;
         if (isCancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute("playsinline", "true");
           await videoRef.current.play().catch(() => {});
           setCameraActive(true);
         }
 
-        // Scan video frames every 220ms using jsQR
+        // Scan video frames every 200ms using jsQR
         scanTimer = setInterval(() => {
           const video = videoRef.current;
           const canvas = canvasRef.current;
           if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-          const ctx = canvas.getContext("2d");
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
           if (!ctx) return;
 
           canvas.width = video.videoWidth;
@@ -430,10 +452,10 @@ export default function PpiRoadshow27Page() {
           if (code && code.data) {
             verifyScannedQrCode(code.data);
           }
-        }, 220);
+        }, 200);
       } catch {
         setCameraError(
-          "Kamera belum diizinkan atau tidak tersedia di perangkat ini. Klik 'Izinkan Kamera' di browser atau pilih gambar QR Super Admin di bawah."
+          "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau unggah file QR di bawah."
         );
       }
     };
@@ -521,56 +543,25 @@ export default function PpiRoadshow27Page() {
 
   const handleLogoutClick = async () => {
     if (!user) return;
-    if (user.role === "USER") {
-      setLogoutModalOpen(true);
-      return;
-    }
-    await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "logout" }),
-    });
-    setUser(null);
-  };
+    const confirmRes = await showConfirm(
+      "Konfirmasi Logout",
+      "Apakah Anda yakin ingin keluar dari sistem Roadshow?"
+    );
+    if (!confirmRes.isConfirmed) return;
 
-  const executeLogout = async (withReview: boolean) => {
-    if (withReview) {
-      if (logoutPesan.trim().length > 50) {
-        alert("Isi penilaian maksimal 50 huruf/karakter.");
-        return;
-      }
-      if (/\.php/i.test(logoutPesan)) {
-        alert("Isi penilaian tidak boleh mengandung file .php!");
-        return;
-      }
-    }
-    setLogoutBusy(true);
+    stopCameraStream();
     try {
       await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "logout",
-          rating: withReview ? logoutRating : undefined,
-          pesan: withReview ? logoutPesan : "",
-          skipReview: !withReview,
-        }),
+        body: JSON.stringify({ action: "logout" }),
       });
-      stopCameraStream();
-      setLogoutModalOpen(false);
-      setLogoutPesan("");
-      setUser(null);
-      setQrVerified(false);
-
-      if (withReview) {
-        alert("Terima kasih! Penilaian & ulasan Anda berhasil disimpan.");
-        window.location.href = "/#penilaian-preview";
-      } else {
-        window.location.href = "/login";
-      }
-    } finally {
-      setLogoutBusy(false);
+    } catch {
+      // offline fallback
     }
+    setUser(null);
+    setQrVerified(false);
+    window.location.href = "/login";
   };
 
   const switchSchool = async (schoolId: string) => {
@@ -755,7 +746,8 @@ export default function PpiRoadshow27Page() {
                 href="/dashboard"
                 className="px-3 sm:px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm"
               >
-                <span>← Kembali ke Dashboard</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span>Kembali ke Dashboard</span>
               </Link>
               <button
                 onClick={handleLogoutClick}
@@ -785,8 +777,9 @@ export default function PpiRoadshow27Page() {
 
             {/* Security Block Alert if scanning non-Super-Admin QR */}
             {qrScanError && (
-              <div className="p-3.5 rounded-xl bg-red-600/20 border-2 border-red-500 text-red-200 text-xs font-bold leading-relaxed animate-pulse">
-                ⛔ {qrScanError}
+              <div className="p-3.5 rounded-xl bg-red-600/20 border-2 border-red-500 text-red-200 text-xs font-bold leading-relaxed flex items-center gap-2 text-left animate-pulse">
+                <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+                <span>{qrScanError}</span>
               </div>
             )}
 
@@ -819,15 +812,26 @@ export default function PpiRoadshow27Page() {
             </div>
 
             {cameraError && (
-              <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
-                {cameraError}
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center justify-center gap-2 text-left">
+                  <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{cameraError}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 border border-zinc-700 font-medium transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Coba Ulang Kamera
+                </button>
+              </div>
             )}
 
             {/* Fallback: Scan directly via Camera Capture / Gallery Image */}
             <div className="pt-1">
-              <label className="cursor-pointer inline-flex items-center justify-center w-full py-3 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-zinc-200 transition">
-                📷 Ambil Foto / Pilih Gambar QR Super Admin
+              <label className="cursor-pointer inline-flex items-center justify-center w-full py-3 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-zinc-200 transition gap-2">
+                <Camera className="w-4 h-4 text-zinc-300" />
+                <span>Ambil Foto / Pilih Gambar QR Super Admin</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -838,91 +842,12 @@ export default function PpiRoadshow27Page() {
               </label>
             </div>
 
-            <p className="text-[11px] text-zinc-500">
-              🔒 Sistem proteksi aktif: Barcode atau QR Code selain milik Super Admin PPI akan otomatis ditolak &amp; diblokir.
+            <p className="text-[11px] text-zinc-500 flex items-center justify-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <span>Sistem proteksi aktif: Barcode atau QR Code selain milik Super Admin PPI akan otomatis ditolak &amp; diblokir.</span>
             </p>
           </div>
         </main>
-
-        {/* Logout Modal with 5-Star Rating & 5-Second Skip Countdown */}
-        {logoutModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl">
-              <div className="text-center">
-                <h3 className="text-base sm:text-lg font-bold text-white">
-                  Konfirmasi Logout &amp; Penilaian
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Beri rating &amp; ulasan singkat (opsional) atau tunggu 5 detik untuk logout tanpa rating.
-                </p>
-              </div>
-
-              {/* BINTANG & RATING DI ATAS SESUAI REQUEST */}
-              <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-center gap-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      type="button"
-                      key={s}
-                      onClick={() => setLogoutRating(s)}
-                      className="text-2xl sm:text-3xl focus:outline-none transition-transform hover:scale-110 active:scale-95"
-                      title={`${s} Bintang`}
-                    >
-                      <span className={s <= logoutRating ? "text-amber-400" : "text-zinc-700"}>
-                        ★
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-zinc-400">Ulasan Singkat (Opsional, Maks. 50 huruf)</span>
-                    <span className="text-[11px] text-zinc-500">{logoutPesan.length}/50</span>
-                  </div>
-                  <textarea
-                    rows={2}
-                    maxLength={50}
-                    value={logoutPesan}
-                    onChange={(e) => setLogoutPesan(e.target.value.slice(0, 50))}
-                    placeholder="Tulis kesan/masukan jika ingin memberi ulasan..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs sm:text-sm text-white focus:border-red-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                  <button
-                    type="button"
-                    disabled={logoutBusy}
-                    onClick={() => executeLogout(true)}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-md shadow-emerald-600/30"
-                  >
-                    ★ Kirim Rating &amp; Logout
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={logoutCountdown > 0 || logoutBusy}
-                    onClick={() => executeLogout(false)}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-xs font-bold transition"
-                  >
-                    {logoutCountdown > 0
-                      ? `Tunggu ${logoutCountdown} dtk...`
-                      : "Logout Tanpa Rating"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setLogoutModalOpen(false)}
-                    className="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
-                  >
-                    Batal
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -964,7 +889,8 @@ export default function PpiRoadshow27Page() {
               href="/dashboard"
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-white flex items-center gap-1.5 transition shadow-sm"
             >
-              <span>← Kembali ke Dashboard</span>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali ke Dashboard</span>
             </Link>
             <button
               onClick={handleLogoutClick}
@@ -1001,9 +927,10 @@ export default function PpiRoadshow27Page() {
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold whitespace-nowrap"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1.5"
                 >
-                  + Buat Sekolah &amp; QR Baru
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Buat Sekolah &amp; QR Baru</span>
                 </button>
               </form>
             </div>
@@ -1034,8 +961,8 @@ export default function PpiRoadshow27Page() {
                     </span>
 
                     {isToday && (
-                      <span className="px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-extrabold uppercase">
-                        ★ Aktif Hari Ini
+                      <span className="px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-extrabold uppercase inline-flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Aktif Hari Ini
                       </span>
                     )}
 
@@ -1053,17 +980,17 @@ export default function PpiRoadshow27Page() {
                         <button
                           type="button"
                           onClick={() => setQrModalSchool(s)}
-                          className="px-2 py-0.5 rounded bg-white text-black font-bold text-[10px]"
+                          className="px-2 py-0.5 rounded bg-white text-black font-bold text-[10px] inline-flex items-center gap-1"
                         >
-                          📱 Buka QR Panitia
+                          <QrCode className="w-3 h-3" /> Buka QR Panitia
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteSchool(s)}
-                          className="px-1.5 py-0.5 rounded bg-black/30 hover:bg-black/50 text-[10px]"
+                          className="p-1 rounded bg-black/30 hover:bg-black/50 text-red-300 text-[10px]"
                           title="Hapus Sekolah"
                         >
-                          ×
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     )}
@@ -1108,13 +1035,14 @@ export default function PpiRoadshow27Page() {
 
             <button
               onClick={() => setActiveTab("REGISTRASI")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition inline-flex items-center gap-1.5 ${
                 activeTab === "REGISTRASI"
                   ? "bg-white text-black border-white"
                   : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
               }`}
             >
-              + Registrasi Nama Peserta
+              <Plus className="w-3.5 h-3.5" />
+              <span>Registrasi Peserta</span>
             </button>
 
             {isAdminRoadshow && (
@@ -1142,7 +1070,8 @@ export default function PpiRoadshow27Page() {
                     : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
                 }`}
               >
-                <span>📰 Kelola Berita Roadshow ({posts.length})</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Kelola Berita Roadshow ({posts.length})</span>
               </button>
             )}
           </div>
@@ -1414,9 +1343,10 @@ export default function PpiRoadshow27Page() {
                 {activeSchool && (
                   <button
                     onClick={() => setQrModalSchool(activeSchool)}
-                    className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs transition"
+                    className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs transition inline-flex items-center gap-1.5"
                   >
-                    📱 Tampilkan QR Sekolah Ini
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>Tampilkan QR Sekolah Ini</span>
                   </button>
                 )}
                 <button
@@ -1576,7 +1506,8 @@ export default function PpiRoadshow27Page() {
                     : "bg-zinc-950 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/60"
                 }`}
               >
-                <span>✓ Sudah Dikunjungi</span>
+                <Check className="w-3.5 h-3.5 inline mr-0.5" />
+                <span>Sudah Dikunjungi</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
                   {posts.filter((p) => p.status === "SUDAH_DIKUNJUNGI").length}
                 </span>
@@ -1591,7 +1522,8 @@ export default function PpiRoadshow27Page() {
                     : "bg-zinc-950 text-sky-400 hover:bg-sky-950/40 border border-sky-900/60"
                 }`}
               >
-                <span>⏳ Akan Dikunjungi</span>
+                <RefreshCw className="w-3.5 h-3.5 inline mr-0.5" />
+                <span>Akan Dikunjungi</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
                   {posts.filter((p) => p.status === "AKAN_DIKUNJUNGI").length}
                 </span>
@@ -1631,7 +1563,7 @@ export default function PpiRoadshow27Page() {
                                   : "bg-sky-600 text-white"
                               }`}
                             >
-                              {isSudah ? "✓ Sudah Dikunjungi" : "⏳ Akan Dikunjungi"}
+                              {isSudah ? "Sudah Dikunjungi" : "Akan Dikunjungi"}
                             </span>
                             <span className="absolute bottom-0 left-0 px-3 py-1 bg-black/70 text-zinc-200 text-[10px] font-mono font-bold">
                               {post.date || "AGUSTUS 2026"}
@@ -1653,7 +1585,7 @@ export default function PpiRoadshow27Page() {
                             </p>
 
                             <div className="text-[11px] text-zinc-500 pt-1">
-                              🏫 {post.schoolName || "Sekolah Mitra"}
+                              Sekolah: {post.schoolName || "Sekolah Mitra"}
                             </div>
                           </div>
                         </div>
@@ -1665,7 +1597,7 @@ export default function PpiRoadshow27Page() {
                             className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold"
                             title="Ubah antara Sudah Dikunjungi dan Akan Dikunjungi"
                           >
-                            Status ⇄
+                            Ganti Status
                           </button>
 
                           <div className="flex items-center gap-1.5">
@@ -1732,8 +1664,9 @@ export default function PpiRoadshow27Page() {
               )}
             </div>
 
-            <p className="text-[11px] text-zinc-400 leading-relaxed">
-              🔒 Terenkripsi HMAC-SHA256. Kamera panitia otomatis memblokir QR lain selain QR ini.
+            <p className="text-[11px] text-zinc-400 leading-relaxed flex items-center justify-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Terenkripsi HMAC-SHA256. Kamera panitia otomatis memblokir QR lain selain QR ini.</span>
             </p>
 
             <button
@@ -1743,86 +1676,6 @@ export default function PpiRoadshow27Page() {
             >
               Tutup QR
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ===================================================================== */}
-      {/* MODAL LOGOUT DENGAN HITUNG MUNDUR 5 DETIK (TANPA WAJIB RATING)        */}
-      {/* ===================================================================== */}
-      {logoutModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4">
-            <div className="text-center">
-              <h3 className="text-base sm:text-lg font-bold text-white">
-                Selesai Bertugas &amp; Logout
-              </h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                Berikan ulasan singkat (opsional) atau tunggu 5 detik untuk langsung logout tanpa rating.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-center gap-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <button
-                    type="button"
-                    key={s}
-                    onClick={() => setLogoutRating(s)}
-                    className="text-2xl focus:outline-none"
-                  >
-                    <span className={s <= logoutRating ? "text-amber-400" : "text-zinc-700"}>
-                      ★
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-zinc-400">Ulasan Singkat (Opsional, Maks. 50 huruf)</span>
-                  <span className="text-[11px] text-zinc-500">{logoutPesan.length}/50</span>
-                </div>
-                <textarea
-                  rows={2}
-                  maxLength={50}
-                  value={logoutPesan}
-                  onChange={(e) => setLogoutPesan(e.target.value.slice(0, 50))}
-                  placeholder="Tulis kesan/evaluasi jika ingin memberi ulasan..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs sm:text-sm text-white focus:border-red-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                <button
-                  type="button"
-                  disabled={logoutBusy}
-                  onClick={() => executeLogout(true)}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-md shadow-emerald-600/30"
-                >
-                  ★ Kirim Rating &amp; Logout
-                </button>
-
-                <button
-                  type="button"
-                  disabled={logoutCountdown > 0 || logoutBusy}
-                  onClick={() => executeLogout(false)}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-xs font-bold transition"
-                >
-                  {logoutCountdown > 0
-                    ? `Logout Tanpa Rating (${logoutCountdown} dtk)`
-                    : "Logout Tanpa Rating"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setLogoutModalOpen(false)}
-                  className="py-2.5 px-4 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-semibold"
-                >
-                  Batal
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1853,7 +1706,7 @@ export default function PpiRoadshow27Page() {
                 onClick={() => setPostModalOpen(false)}
                 className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center font-bold text-xs"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -1882,8 +1735,8 @@ export default function PpiRoadshow27Page() {
                     onChange={(e) => setPostFormStatus(e.target.value as any)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-bold focus:border-red-500 focus:outline-none"
                   >
-                    <option value="SUDAH_DIKUNJUNGI">🟢 Sudah Dikunjungi</option>
-                    <option value="AKAN_DIKUNJUNGI">🔵 Akan Dikunjungi (Jadwal/Agenda)</option>
+                    <option value="SUDAH_DIKUNJUNGI">Sudah Dikunjungi</option>
+                    <option value="AKAN_DIKUNJUNGI">Akan Dikunjungi (Jadwal/Agenda)</option>
                   </select>
                 </div>
 
@@ -1944,7 +1797,7 @@ export default function PpiRoadshow27Page() {
 
               {postFormStatus === "AKAN_DIKUNJUNGI" ? (
                 <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs flex items-start gap-2.5">
-                  <span className="text-lg leading-none">ℹ️</span>
+                  <Shield className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
                     <span className="font-bold block text-sky-200">
                       Status: Akan Dikunjungi (Agenda Kalender)
@@ -1981,7 +1834,7 @@ export default function PpiRoadshow27Page() {
                         />
                         <div className="absolute top-2 right-2 flex items-center gap-1.5">
                           <span className="px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-bold">
-                            ✓ Terpasang
+                            Terpasang
                           </span>
                           <button
                             type="button"
@@ -2033,7 +1886,7 @@ export default function PpiRoadshow27Page() {
                   disabled={postFormSaving || uploadingPostImg}
                   className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/30"
                 >
-                  {postFormSaving ? "Menyimpan..." : "✓ Simpan & Publikasikan"}
+                  {postFormSaving ? "Menyimpan..." : "Simpan & Publikasikan"}
                 </button>
                 <button
                   type="button"

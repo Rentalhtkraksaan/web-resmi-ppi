@@ -118,6 +118,13 @@ export default function DashboardPage() {
   const [resetPasswordModal, setResetPasswordModal] = useState<ManagedAccount | null>(null);
   const [newPasswordVal, setNewPasswordVal] = useState("");
 
+  // Super Admin: Tambah Sekolah Roadshow
+  const [showAddSchoolModal, setShowAddSchoolModal] = useState(false);
+  const [newSchoolName, setNewSchoolName] = useState("");
+  const [newSchoolLocation, setNewSchoolLocation] = useState("");
+  const [newSchoolDate, setNewSchoolDate] = useState("");
+  const [addingSchoolBusy, setAddingSchoolBusy] = useState(false);
+
   // Form Add Item + Upload Image (Merchandise & Gallery)
   const [itemTitle, setItemTitle] = useState("");
   const [itemPrice, setItemPrice] = useState("");
@@ -172,19 +179,35 @@ export default function DashboardPage() {
         setReviews(lData.reviews || []);
       }
 
-      if (currentUser.role === "SUPER_ADMIN") {
-        const [uRes, rsRes] = await Promise.all([
-          fetch("/api/users", { cache: "no-store" }),
-          fetch("/api/roadshow?mode=internal", { cache: "no-store" }),
-        ]);
-        if (uRes.ok) {
-          const uData = await uRes.json();
-          setAccounts(uData.users || []);
+      const isSuperUser = currentUser.role === "SUPER_ADMIN";
+      const canManageRoadshow =
+        isSuperUser ||
+        currentUser.role === "ADMIN" ||
+        Boolean(currentUser.permissions?.manageRoadshow);
+
+      // Load Roadshow Schools for Super Admin AND Admin Roadshow!
+      if (canManageRoadshow) {
+        try {
+          const rsRes = await fetch("/api/roadshow?mode=internal", { cache: "no-store" });
+          if (rsRes.ok) {
+            const rsData = await rsRes.json();
+            setRoadshowSchools(rsData.schools || []);
+            setTodaySchoolId(rsData.todaySchoolId || (rsData.schools?.[0]?.id ?? ""));
+          }
+        } catch {
+          // non-blocking
         }
-        if (rsRes.ok) {
-          const rsData = await rsRes.json();
-          setRoadshowSchools(rsData.schools || []);
-          setTodaySchoolId(rsData.todaySchoolId || "");
+      }
+
+      if (isSuperUser) {
+        try {
+          const uRes = await fetch("/api/users", { cache: "no-store" });
+          if (uRes.ok) {
+            const uData = await uRes.json();
+            setAccounts(uData.users || []);
+          }
+        } catch {
+          // non-blocking
         }
       }
 
@@ -198,7 +221,7 @@ export default function DashboardPage() {
           }
         } else {
           const rtdbRes = await fetch(
-            "https://cwu-gen-2-default-rtdb.firebaseio.com/system/visitorCount.json",
+            "https://paskab-c3eb4-default-rtdb.firebaseio.com/system/visitorCount.json",
             { cache: "no-store" }
           );
           if (rtdbRes.ok) {
@@ -238,16 +261,80 @@ export default function DashboardPage() {
     await fetch("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "logout", rating: 5, pesan: "Selesai bertugas." }),
+      body: JSON.stringify({ action: "logout" }),
     });
     setUser(null);
+    window.location.href = "/login";
   };
 
   const isSuper = user?.role === "SUPER_ADMIN";
   const canLanding = isSuper || Boolean(user?.permissions?.manageLanding);
   const canMerch = isSuper || Boolean(user?.permissions?.manageMerchandise) || canLanding;
   const canReviews = isSuper || Boolean(user?.permissions?.manageReviews) || canLanding;
-  const canRoadshow = isSuper || Boolean(user?.permissions?.manageRoadshow);
+  const canRoadshow =
+    isSuper ||
+    user?.role === "ADMIN" ||
+    Boolean(user?.permissions?.manageRoadshow);
+
+  // Super Admin: Tambah Sekolah Baru
+  const handleCreateSchool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSchoolName.trim()) {
+      showError("Gagal", "Nama sekolah wajib diisi!");
+      return;
+    }
+    setAddingSchoolBusy(true);
+    try {
+      const res = await fetch("/api/roadshow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_school",
+          namaSekolah: newSchoolName.trim(),
+          lokasi: newSchoolLocation.trim() || "Kab. Probolinggo",
+          tanggal: newSchoolDate.trim() || new Date().toLocaleDateString("id-ID"),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError("Gagal", data.error || "Gagal menambahkan sekolah.");
+        return;
+      }
+      showSuccess(
+        "Sekolah Ditambahkan",
+        `Sekolah ${newSchoolName.toUpperCase()} berhasil didaftarkan dan disetel sebagai sekolah aktif hari ini!`
+      );
+      setNewSchoolName("");
+      setNewSchoolLocation("");
+      setNewSchoolDate("");
+      setShowAddSchoolModal(false);
+      loadAll();
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
+    } finally {
+      setAddingSchoolBusy(false);
+    }
+  };
+
+  // Super Admin: Hapus Sekolah
+  const handleDeleteSchool = async (school: any) => {
+    const confirmed = await showConfirm(
+      "Hapus Sekolah",
+      `Hapus sekolah "${school.namaSekolah}" beserta seluruh data penilaiannya secara permanen?`
+    );
+    if (!confirmed.isConfirmed) return;
+    try {
+      const res = await fetch(`/api/roadshow?type=school&id=${school.id}`, { method: "DELETE" });
+      if (res.ok) {
+        showSuccess("Berhasil", "Sekolah berhasil dihapus.");
+        loadAll();
+      } else {
+        showError("Gagal", "Gagal menghapus sekolah.");
+      }
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server.");
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetItem?: any) => {
     const file = e.target.files?.[0];
@@ -1499,17 +1586,17 @@ export default function DashboardPage() {
           {activeNav === "ROADSHOW" && canRoadshow && (
             <div className="space-y-6">
               {/* Shortcut Banner to Roadshow News & Photo Management */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-gradient-to-r from-red-900/90 via-red-800 to-amber-900/80 text-white shadow-lg border border-red-700/50">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-gradient-to-r from-red-900 via-rose-900 to-amber-950 text-white shadow-lg border border-red-700/40">
                 <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-red-500/30 text-rose-200 text-[10px] font-black uppercase tracking-wider">
-                    <span>★</span>
+                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-red-500/20 text-rose-200 text-[10px] font-bold tracking-wider uppercase border border-red-400/20">
+                    <Shield className="w-3 h-3 text-red-400" />
                     <span>Portal Berita, Agenda &amp; Dokumentasi</span>
                   </div>
                   <h3 className="text-sm sm:text-base font-extrabold text-white">
                     Kelola Berita Roadshow, Foto Kunjungan, &amp; Hasil Seleksi Siswa
                   </h3>
                   <p className="text-xs text-rose-100/80 max-w-2xl leading-relaxed">
-                    Super Admin &amp; Penjab Roadshow memiliki kontrol penuh untuk menambah berita agenda, mengunggah foto kunjungan sekolah yang sudah selesai, serta menyunting kelulusan peserta.
+                    Super Admin &amp; Penjab Roadshow memiliki kontrol untuk mengelola berita agenda, foto dokumentasi kunjungan, serta verifikasi hasil seleksi.
                   </p>
                 </div>
                 <Link
@@ -1556,7 +1643,7 @@ export default function DashboardPage() {
                   >
                     {roadshowSchools.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.namaSekolah} {s.statusPenilaian === "Hari Ini" ? "(★ Aktif Hari Ini)" : "(🔒 Terkunci)"}
+                        {s.namaSekolah} {s.statusPenilaian === "Hari Ini" ? "(Aktif Hari Ini)" : "(Terkunci)"}
                       </option>
                     ))}
                   </select>
@@ -1578,41 +1665,78 @@ export default function DashboardPage() {
 
               {/* Tabel Daftar Sekolah Roadshow */}
               <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-extrabold text-slate-900">
-                    Daftar Sekolah &amp; Status Roadshow Kabupaten Probolinggo
-                  </h3>
-                  <span className="text-xs text-slate-500">
-                    {roadshowSchools.length} Sekolah Terdaftar
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Daftar Sekolah &amp; Status Roadshow Kabupaten Probolinggo
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      {roadshowSchools.length} Sekolah Terdaftar
+                    </span>
+                  </div>
+
+                  {isSuper && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSchoolModal(true)}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition self-start sm:self-auto"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Tambah Sekolah Baru</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {roadshowSchools.map((school) => (
                     <div
                       key={school.id}
-                      className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-blue-300 transition shadow-xs flex items-center justify-between"
+                      className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-blue-300 transition shadow-xs flex items-center justify-between gap-3"
                     >
-                      <div>
-                        <strong className="text-xs font-bold text-slate-900 block">
+                      <div className="min-w-0 flex-1">
+                        <strong className="text-xs font-bold text-slate-900 block truncate">
                           {school.namaSekolah}
                         </strong>
-                        <span className="text-[11px] text-slate-500 block">
+                        <span className="text-[11px] text-slate-500 block truncate">
                           Kecamatan: {school.lokasi || "Probolinggo"}
                         </span>
-                        <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[10px] mt-1">
-                          {school.passedCount || 0} Kandidat Lolos
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[10px]">
+                            {school.passedCount || 0} Lolos
+                          </span>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              school.statusPenilaian === "Hari Ini"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-slate-200 text-slate-700"
+                            }`}
+                          >
+                            {school.statusPenilaian === "Hari Ini" ? "Aktif Hari Ini" : "Terkunci"}
+                          </span>
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setQrModalSchool(school)}
-                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-xs"
-                      >
-                        <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                        <span>QR</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setQrModalSchool(school)}
+                          className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-xs transition"
+                          title="Buka QR Barcode"
+                        >
+                          <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                          <span>QR</span>
+                        </button>
+                        {isSuper && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSchool(school)}
+                            className="p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold shadow-xs transition"
+                            title="Hapus Sekolah (Super Admin)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2652,6 +2776,100 @@ export default function DashboardPage() {
                   className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
                 >
                   Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL 5: TAMBAH SEKOLAH ROADSHOW BARU (KHUSUS SUPER ADMIN)            */}
+      {/* ===================================================================== */}
+      {showAddSchoolModal && (
+        <div
+          onClick={() => setShowAddSchoolModal(false)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 text-left space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <School className="w-5 h-5 text-blue-600" />
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Tambah Sekolah Roadshow Baru
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddSchoolModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSchool} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Nama Sekolah <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newSchoolName}
+                  onChange={(e) => setNewSchoolName(e.target.value.toUpperCase())}
+                  placeholder="Contoh: SMAN 1 GENDING"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 font-bold focus:outline-none focus:border-blue-500 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Kecamatan / Lokasi
+                </label>
+                <input
+                  type="text"
+                  value={newSchoolLocation}
+                  onChange={(e) => setNewSchoolLocation(e.target.value)}
+                  placeholder="Contoh: Gending, Kab. Probolinggo"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Tanggal Kunjungan Roadshow
+                </label>
+                <input
+                  type="text"
+                  value={newSchoolDate}
+                  onChange={(e) => setNewSchoolDate(e.target.value)}
+                  placeholder="Contoh: 10 AGUSTUS 2026"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-[11px] leading-relaxed">
+                Sekolah yang baru ditambahkan akan otomatis terdaftar dalam sistem dan siap disetel aktif untuk pengukuran fisik peserta.
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddSchoolModal(false)}
+                  className="py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingSchoolBusy}
+                  className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white font-bold text-xs transition shadow-md shadow-blue-500/20"
+                >
+                  {addingSchoolBusy ? "Menyimpan..." : "Simpan Sekolah"}
                 </button>
               </div>
             </form>

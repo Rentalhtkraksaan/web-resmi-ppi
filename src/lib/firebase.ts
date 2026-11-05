@@ -1,20 +1,21 @@
-export const ROADSHOW_RTDB_URL = "https://cwu-gen-2-default-rtdb.firebaseio.com";
+export const ROADSHOW_RTDB_URL = "https://paskab-c3eb4-default-rtdb.firebaseio.com";
 export const UMUM_RTDB_URL = "https://paskab-c3eb4-default-rtdb.firebaseio.com";
 
 export const ROADSHOW_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDpPEkKbEt6b_v2OWlBfGuaVQpBg2-RWR4",
-  authDomain: "cwu-gen-2.firebaseapp.com",
-  databaseURL: ROADSHOW_RTDB_URL,
-  projectId: "cwu-gen-2",
-  storageBucket: "cwu-gen-2.appspot.com",
-  messagingSenderId: "40585612014",
-  appId: "1:40585612014:web:c88141fee3699aca68181ff",
+  apiKey: "AIzaSyCtQh5SpZCk2TDUk9iMOjQX5uc6gRIJyp8",
+  authDomain: "paskab-c3eb4.firebaseapp.com",
+  databaseURL: "https://paskab-c3eb4-default-rtdb.firebaseio.com",
+  projectId: "paskab-c3eb4",
+  storageBucket: "paskab-c3eb4.firebasestorage.app",
+  messagingSenderId: "630872087747",
+  appId: "1:630872087747:web:dbe8eee722f2d0f6759676",
+  measurementId: "G-SM5LN74FK4",
 };
 
 export const UMUM_FIREBASE_CONFIG = {
   apiKey: "AIzaSyCtQh5SpZCk2TDUk9iMOjQX5uc6gRIJyp8",
   authDomain: "paskab-c3eb4.firebaseapp.com",
-  databaseURL: UMUM_RTDB_URL,
+  databaseURL: "https://paskab-c3eb4-default-rtdb.firebaseio.com",
   projectId: "paskab-c3eb4",
   storageBucket: "paskab-c3eb4.firebasestorage.app",
   messagingSenderId: "630872087747",

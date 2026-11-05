@@ -663,7 +663,7 @@ export async function POST(req: NextRequest) {
   }
 
   // =========================================================================
-  // ACTION: LOGOUT (Optional review OR 5-second skip countdown!)
+  // ACTION: LOGOUT (Clean Logout - Tanpa Otomatis Nambah Ulasan)
   // =========================================================================
   if (action === "logout") {
     const session = getServerSession();
@@ -676,45 +676,6 @@ export async function POST(req: NextRequest) {
             data: { assignedSchoolId: null },
           })
           .catch(() => {});
-      }
-
-      // Save review on logout for any authenticated user (Super Admin, Admin, or User)
-      if (!body.skipReview) {
-        const rating = Number(body.rating) || 5;
-        const rawPesan = sanitizeString(String(body.pesan || "")).slice(0, 50);
-        const pesan = rawPesan || (rating >= 4 ? "Pelayanan sangat baik dan lancar" : "Evaluasi kegiatan roadshow");
-
-        if (rating >= 1 && rating <= 5) {
-          const createdReview = await prisma.review.create({
-            data: {
-              nama: session.fullName,
-              kategori: "ppi",
-              angkatan: session.angkatan !== "-" ? session.angkatan : "Panitia",
-              rating: Math.min(5, Math.max(1, Math.round(rating))),
-              pesan,
-              source: "LOGOUT_ROADSHOW",
-              isVisible: true,
-            },
-          }).catch((err) => {
-            console.warn("Prisma review create non-fatal warning:", err);
-            return null;
-          });
-
-          const rtdbPayload = {
-            nama: session.fullName,
-            rating: Math.min(5, Math.max(1, Math.round(rating))),
-            pesan,
-            kategori: "ppi",
-            angkatan: session.angkatan !== "-" ? session.angkatan : "Panitia",
-            waktu: new Date().toLocaleString("id-ID"),
-            createdAt: new Date().toISOString(),
-          };
-
-          await Promise.allSettled([
-            firebasePush(ROADSHOW_RTDB_URL, "penilaian", rtdbPayload),
-            firebasePush(UMUM_RTDB_URL, "penilaian", rtdbPayload),
-          ]);
-        }
       }
 
       await prisma.securityAuditLog.create({
