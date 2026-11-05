@@ -45,3 +45,4 @@ export function useLive(fn: () => void | Promise<void>, intervalMs = 1000, enabl
     };
   }, [intervalMs, enabled]);
 }
+

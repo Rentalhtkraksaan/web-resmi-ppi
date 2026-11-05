@@ -2,21 +2,24 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// TiDB Cloud (kompatibel MySQL). TiDB tidak memakai foreign key database,
+// jadi relasi & cascade delete dikelola oleh Prisma (relationMode = "prisma").
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
 model UserAccount {
   id               String   @id @default(cuid())
   username         String   @unique
-  email            String   @default("")
-  phone            String   @default("")
-  passwordHash     String
-  fullName         String
-  angkatan         String   @default("-")
-  role             String   @default("USER") // SUPER_ADMIN | ADMIN | USER
-  permissions      String   @default("{}")   // JSON: { inputBB, inputTB, inputRegistrasi, manageLanding, manageMerchandise, manageReviews, manageRoadshow }
+  email            String   @default("") @db.VarChar(255)
+  phone            String   @default("") @db.VarChar(50)
+  passwordHash     String   @db.VarChar(255)
+  fullName         String   @db.VarChar(255)
+  angkatan         String   @default("-") @db.VarChar(50)
+  role             String   @default("USER") @db.VarChar(50) // SUPER_ADMIN | ADMIN | USER
+  permissions      String   @default("{}") @db.VarChar(2000) // JSON: { inputBB, inputTB, inputRegistrasi, manageLanding, manageMerchandise, manageReviews, manageRoadshow }
   assignedSchoolId String?
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
@@ -25,7 +28,7 @@ model UserAccount {
 
 model SystemFlag {
   key       String   @id
-  value     String   @default("")
+  value     String   @default("") @db.VarChar(1000)
   updatedAt DateTime @updatedAt
 }
 
@@ -39,58 +42,58 @@ model LoginAttempt {
 
 model SecurityAuditLog {
   id        String   @id @default(cuid())
-  actorName String
-  actorRole String
-  action    String
-  details   String
-  ipAddress String   @default("local")
+  actorName String   @db.VarChar(255)
+  actorRole String   @db.VarChar(50)
+  action    String   @db.VarChar(100)
+  details   String   @db.VarChar(2000)
+  ipAddress String   @default("local") @db.VarChar(100)
   createdAt DateTime @default(now())
 }
 
 model LandingConfig {
   id                 String   @id @default("default")
-  heroTitle          String   @default("GENERASI EMAS INDONESIA")
-  heroSubtitle       String   @default("Purna Paskibraka Indonesia Kabupaten Probolinggo. Membangun Karakter Kedisiplinan, Kepemimpinan, dan Jiwa Nasionalisme Pemuda Masa Depan.")
-  heroCtaText        String   @default("Visit Profile BPIP")
-  heroCtaUrl         String   @default("https://paskibraka.bpip.go.id/dashboard")
-  waAdminMerch       String   @default("6282228368042")
-  bukberTitle        String   @default("BUKBER PPI KAB. PROBOLINGGO 2026")
-  bukberDesc         String   @default("Ingatkah saat kita berpanas di bawah terik yang sama? Kini, saatnya kita duduk melingkar dalam sejuknya kekeluargaan. Bukan sekadar tentang menu berbuka, tapi tentang cerita yang takkan pernah usai.")
-  bukberDate         String   @default("Sabtu, 28 Feb 2026 | 16:00 WIB - Selesai")
-  bukberLocation     String   @default("SMKN 2 Kraksaan")
-  bukberHtm          String   @default("Rp 30.000")
-  suratEdaranTitle   String   @default("Surat Edaran Resmi Pra-Seleksi")
-  suratEdaranDesc    String   @default("Surat Edaran resmi pra-seleksi Roadshow Paskibraka Kabupaten Probolinggo.")
-  suratEdaranUrl     String   @default("/surat-edaran-roadshow.pdf")
+  heroTitle          String   @default("GENERASI EMAS INDONESIA") @db.VarChar(500)
+  heroSubtitle       String   @default("Purna Paskibraka Indonesia Kabupaten Probolinggo. Membangun Karakter Kedisiplinan, Kepemimpinan, dan Jiwa Nasionalisme Pemuda Masa Depan.") @db.VarChar(1000)
+  heroCtaText        String   @default("Visit Profile BPIP") @db.VarChar(255)
+  heroCtaUrl         String   @default("https://paskibraka.bpip.go.id/dashboard") @db.VarChar(1000)
+  waAdminMerch       String   @default("6282228368042") @db.VarChar(50)
+  bukberTitle        String   @default("BUKBER PPI KAB. PROBOLINGGO 2026") @db.VarChar(500)
+  bukberDesc         String   @default("Ingatkah saat kita berpanas di bawah terik yang sama? Kini, saatnya kita duduk melingkar dalam sejuknya kekeluargaan. Bukan sekadar tentang menu berbuka, tapi tentang cerita yang takkan pernah usai.") @db.VarChar(2000)
+  bukberDate         String   @default("Sabtu, 28 Feb 2026 | 16:00 WIB - Selesai") @db.VarChar(255)
+  bukberLocation     String   @default("SMKN 2 Kraksaan") @db.VarChar(255)
+  bukberHtm          String   @default("Rp 30.000") @db.VarChar(100)
+  suratEdaranTitle   String   @default("Surat Edaran Resmi Pra-Seleksi") @db.VarChar(500)
+  suratEdaranDesc    String   @default("Surat Edaran resmi pra-seleksi Roadshow Paskibraka Kabupaten Probolinggo.") @db.VarChar(1000)
+  suratEdaranUrl     String   @default("/surat-edaran-roadshow.pdf") @db.VarChar(1000)
   suratEdaranVisible Boolean  @default(true)
-  suratEdaranStatus  String   @default("Segera Hadir")
+  suratEdaranStatus  String   @default("Segera Hadir") @db.VarChar(100)
   updatedAt          DateTime @updatedAt
 }
 
 model LandingItem {
   id           String   @id @default(cuid())
-  section      String   // ROADSHOW_GALLERY | MERCHANDISE | BUKBER_GALLERY | DOCUMENT_PDF
-  title        String
-  subtitle     String   @default("")
-  description  String   @default("")
-  price        String   @default("")
-  imageUrl     String   @default("")
-  fileUrl      String   @default("")
-  metaLocation String   @default("")
-  metaDay      String   @default("")
-  metaDate     String   @default("")
+  section      String   @db.VarChar(100) // ROADSHOW_GALLERY | MERCHANDISE | BUKBER_GALLERY | DOCUMENT_PDF
+  title        String   @db.VarChar(500)
+  subtitle     String   @default("") @db.VarChar(500)
+  description  String   @default("") @db.VarChar(3000)
+  price        String   @default("") @db.VarChar(100)
+  imageUrl     String   @default("") @db.VarChar(1000)
+  fileUrl      String   @default("") @db.VarChar(1000)
+  metaLocation String   @default("") @db.VarChar(255)
+  metaDay      String   @default("") @db.VarChar(100)
+  metaDate     String   @default("") @db.VarChar(100)
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
 }
 
 model Review {
   id        String   @id @default(cuid())
-  nama      String
-  kategori  String   @default("umum") // umum | ppi | user_roadshow
-  angkatan  String   @default("-")
+  nama      String   @db.VarChar(255)
+  kategori  String   @default("umum") @db.VarChar(50) // umum | ppi | user_roadshow
+  angkatan  String   @default("-") @db.VarChar(50)
   rating    Int      @default(5)
-  pesan     String
-  source    String   @default("LANDING") // LANDING | LOGOUT_ROADSHOW
+  pesan     String   @db.VarChar(3000)
+  source    String   @default("LANDING") @db.VarChar(50) // LANDING | LOGOUT_ROADSHOW
   isVisible Boolean  @default(true)
   createdAt DateTime @default(now())
 }
@@ -98,10 +101,10 @@ model Review {
 model RoadshowSchool {
   id                    String              @id @default(cuid())
   firebaseKey           String?             @unique
-  namaSekolah           String
-  lokasi                String              @default("Kab. Probolinggo")
-  tanggal               String              @default("-")
-  statusPenilaian       String              @default("Dibuka") // Dibuka | Ditutup
+  namaSekolah           String              @db.VarChar(255)
+  lokasi                String              @default("Kab. Probolinggo") @db.VarChar(255)
+  tanggal               String              @default("-") @db.VarChar(100)
+  statusPenilaian       String              @default("Dibuka") @db.VarChar(50) // Dibuka | Ditutup | Hari Ini
   minBeratCewek         Float               @default(45)
   maxBeratCewek         Float               @default(60)
   minTinggiCewek        Float               @default(155)
@@ -112,10 +115,10 @@ model RoadshowSchool {
   maxTinggiCowok        Float               @default(180)
   sortOrder             Int                 @default(0)
   isActiveToday         Boolean             @default(false)
-  documentationPhoto    String              @default("")
-  documentationTitle    String              @default("")
-  documentationDate     String              @default("")
-  documentationLocation String              @default("")
+  documentationPhoto    String              @default("") @db.VarChar(1000)
+  documentationTitle    String              @default("") @db.VarChar(500)
+  documentationDate     String              @default("") @db.VarChar(100)
+  documentationLocation String              @default("") @db.VarChar(255)
   closedAt              DateTime?
   createdAt             DateTime            @default(now())
   candidates            RoadshowCandidate[]
@@ -124,37 +127,38 @@ model RoadshowSchool {
 model RoadshowCandidate {
   id           String         @id @default(cuid())
   firebaseKey  String?        @unique
-  kodePeserta  String
-  nama         String
-  jenisKelamin String         // Cewek | Cowok
+  kodePeserta  String         @db.VarChar(50)
+  nama         String         @db.VarChar(255)
+  jenisKelamin String         @db.VarChar(20) // Cewek | Cowok
   schoolId     String
   school       RoadshowSchool @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   beratBadan   Float          @default(0)
   tinggiBadan  Float          @default(0)
   hasilLulus   Boolean        @default(false)
   statusTayang Boolean        @default(false)
-  keterangan   String         @default("")
-  updatedBy    String         @default("System")
+  keterangan   String         @default("") @db.VarChar(1000)
+  updatedBy    String         @default("System") @db.VarChar(255)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+
+  @@index([schoolId])
 }
 
 model RoadshowPost {
   id          String   @id @default(cuid())
-  title       String
-  category    String   @default("Kunjungan Sekolah") // Kunjungan Sekolah | Sosialisasi | Pra-Seleksi | Evaluasi
-  status      String   @default("SUDAH_DIKUNJUNGI")  // SUDAH_DIKUNJUNGI | AKAN_DIKUNJUNGI
+  title       String   @db.VarChar(500)
+  category    String   @default("Kunjungan Sekolah") @db.VarChar(255) // Kunjungan Sekolah | Sosialisasi | Pra-Seleksi | Evaluasi
+  status      String   @default("SUDAH_DIKUNJUNGI") @db.VarChar(50)  // SUDAH_DIKUNJUNGI | AKAN_DIKUNJUNGI
   schoolId    String?
-  schoolName  String   @default("")
-  location    String   @default("Kab. Probolinggo")
-  date        String   // e.g. "04 AGUSTUS 2026"
-  imageUrl    String   @default("")
-  summary     String   @default("")
-  content     String   @default("")
+  schoolName  String   @default("") @db.VarChar(255)
+  location    String   @default("Kab. Probolinggo") @db.VarChar(255)
+  date        String   @db.VarChar(100) // e.g. "04 AGUSTUS 2026"
+  imageUrl    String   @default("") @db.VarChar(1000)
+  summary     String   @default("") @db.VarChar(1500)
+  content     String   @default("") @db.VarChar(8000)
   sortOrder   Int      @default(0)
   isPublished Boolean  @default(true)
-  author      String   @default("Penjab Roadshow")
+  author      String   @default("Penjab Roadshow") @db.VarChar(255)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
-

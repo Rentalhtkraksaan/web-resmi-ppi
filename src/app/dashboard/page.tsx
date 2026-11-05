@@ -220,17 +220,6 @@ export default function DashboardPage() {
           if (typeof vData.count === "number" && vData.count >= 0) {
             setVisitorCount(vData.count);
           }
-        } else {
-          const rtdbRes = await fetch(
-            "https://paskab-c3eb4-default-rtdb.firebaseio.com/system/visitorCount.json",
-            { cache: "no-store" }
-          );
-          if (rtdbRes.ok) {
-            const rtdbData = await rtdbRes.json();
-            if (typeof rtdbData === "number" && rtdbData >= 0) {
-              setVisitorCount(rtdbData);
-            }
-          }
         }
       } catch {
         // fallback ok

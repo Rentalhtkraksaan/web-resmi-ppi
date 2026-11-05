@@ -222,11 +222,12 @@ export function inspectPayloadForAttacks(input: unknown): { safe: boolean; reaso
   return { safe: true };
 }
 
-export function sanitizeString(str: string): string {
+export function sanitizeString(str: string, max = 500): string {
   return str
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .trim();
+    .trim()
+    .slice(0, max);
 }
 
 /**

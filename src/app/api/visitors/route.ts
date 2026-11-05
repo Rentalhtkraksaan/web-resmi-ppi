@@ -1,85 +1,43 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-const PRIMARY_RTDB_URL = "https://cwu-gen-2-default-rtdb.firebaseio.com/system/visitorCount.json";
-const BACKUP_RTDB_URL = "https://paskab-c3eb4-default-rtdb.firebaseio.com/visitor_stats/total_calls.json";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const BASE_COUNT = 2410;
+const KEY = "visitor_count";
+const HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+};
 
-// In-memory fallback if all external RTDBs are unreachable
-let fallbackMemoryCount = BASE_COUNT;
-
-async function getLiveVisitorCount(): Promise<number> {
+async function readCount(): Promise<number> {
   try {
-    const res = await fetch(PRIMARY_RTDB_URL, {
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (res.ok) {
-      const val = await res.json();
-      if (typeof val === "number" && val >= BASE_COUNT) {
-        fallbackMemoryCount = Math.max(fallbackMemoryCount, val);
-        return val;
-      }
-    }
+    const row = await prisma.systemFlag.findUnique({ where: { key: KEY } });
+    const n = row ? parseInt(row.value, 10) : NaN;
+    return Number.isFinite(n) && n >= BASE_COUNT ? n : BASE_COUNT;
   } catch {
-    // fallback
-  }
-
-  return Math.max(fallbackMemoryCount, BASE_COUNT);
-}
-
-async function persistVisitorCount(count: number): Promise<void> {
-  fallbackMemoryCount = Math.max(fallbackMemoryCount, count);
-
-  // 1. Primary write to cwu-gen-2 RTDB (tested & open)
-  try {
-    await fetch(PRIMARY_RTDB_URL, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(count),
-    });
-  } catch (err) {
-    console.warn("Failed to persist visitor count to primary RTDB:", err);
-  }
-
-  // 2. Best-effort mirror to paskab-c3eb4 RTDB
-  try {
-    fetch(BACKUP_RTDB_URL, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(count),
-    }).catch(() => {});
-  } catch {
-    // ignore
+    return BASE_COUNT;
   }
 }
 
 export async function GET() {
-  const count = await getLiveVisitorCount();
-  return NextResponse.json(
-    { count },
-    {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
-    }
-  );
+  return NextResponse.json({ count: await readCount() }, { headers: HEADERS });
 }
 
 export async function POST() {
-  const current = await getLiveVisitorCount();
-  const nextCount = Math.max(current, BASE_COUNT) + 1;
-  await persistVisitorCount(nextCount);
-
-  return NextResponse.json(
-    { success: true, count: nextCount },
-    {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
-    }
-  );
+  try {
+    // Pastikan baris ada, lalu naikkan 1 secara atomik di database (aman untuk banyak pengunjung)
+    await prisma.systemFlag.upsert({
+      where: { key: KEY },
+      update: {},
+      create: { key: KEY, value: String(BASE_COUNT) },
+    });
+    await prisma.$executeRaw`UPDATE SystemFlag SET value = CAST(CAST(value AS UNSIGNED) + 1 AS CHAR) WHERE \`key\` = ${KEY}`;
+  } catch (err) {
+    console.warn("Gagal menambah visitor count:", err);
+  }
+  return NextResponse.json({ success: true, count: await readCount() }, { headers: HEADERS });
 }
 
 export async function OPTIONS() {
@@ -92,8 +50,3 @@ export async function OPTIONS() {
     },
   });
 }
-
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-

@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
     const kategori = ["umum", "ppi"].includes(body.kategori) ? body.kategori : "umum";
     const angkatan = sanitizeString(String(body.angkatan || "-")).slice(0, 10);
     const rating = Math.min(5, Math.max(1, Number(body.rating) || 5));
-    const pesan = sanitizeString(String(body.pesan || ""));
+    const pesan = sanitizeString(String(body.pesan || ""), 3000);
 
     if (!nama || !pesan) {
       return NextResponse.json({ error: "Nama dan pesan ulasan wajib diisi." }, { status: 400 });
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
         section,
         title: sanitizeString(String(body.title || "")),
         subtitle: sanitizeString(String(body.subtitle || "")),
-        description: sanitizeString(String(body.description || "")),
+        description: sanitizeString(String(body.description || ""), 3000),
         price: sanitizeString(String(body.price || "")),
         imageUrl: String(body.imageUrl || "").trim(),
         fileUrl: String(body.fileUrl || "").trim(),
@@ -279,16 +279,16 @@ export async function PUT(req: NextRequest) {
     const data: Record<string, any> = {};
     if (perms.manageLanding) {
       if (body.heroTitle !== undefined) data.heroTitle = sanitizeString(String(body.heroTitle));
-      if (body.heroSubtitle !== undefined) data.heroSubtitle = sanitizeString(String(body.heroSubtitle));
+      if (body.heroSubtitle !== undefined) data.heroSubtitle = sanitizeString(String(body.heroSubtitle), 1000);
       if (body.heroCtaText !== undefined) data.heroCtaText = sanitizeString(String(body.heroCtaText));
       if (body.heroCtaUrl !== undefined) data.heroCtaUrl = String(body.heroCtaUrl).trim();
       if (body.bukberTitle !== undefined) data.bukberTitle = sanitizeString(String(body.bukberTitle));
-      if (body.bukberDesc !== undefined) data.bukberDesc = sanitizeString(String(body.bukberDesc));
+      if (body.bukberDesc !== undefined) data.bukberDesc = sanitizeString(String(body.bukberDesc), 2000);
       if (body.bukberDate !== undefined) data.bukberDate = sanitizeString(String(body.bukberDate));
       if (body.bukberLocation !== undefined) data.bukberLocation = sanitizeString(String(body.bukberLocation));
       if (body.bukberHtm !== undefined) data.bukberHtm = sanitizeString(String(body.bukberHtm));
       if (body.suratEdaranTitle !== undefined) data.suratEdaranTitle = sanitizeString(String(body.suratEdaranTitle));
-      if (body.suratEdaranDesc !== undefined) data.suratEdaranDesc = sanitizeString(String(body.suratEdaranDesc));
+      if (body.suratEdaranDesc !== undefined) data.suratEdaranDesc = sanitizeString(String(body.suratEdaranDesc), 1000);
       if (body.suratEdaranUrl !== undefined) data.suratEdaranUrl = String(body.suratEdaranUrl).trim();
       if (body.suratEdaranVisible !== undefined) data.suratEdaranVisible = Boolean(body.suratEdaranVisible);
       if (body.suratEdaranStatus !== undefined) data.suratEdaranStatus = sanitizeString(String(body.suratEdaranStatus));
@@ -338,7 +338,7 @@ export async function PUT(req: NextRequest) {
       data: {
         title: body.title !== undefined ? sanitizeString(String(body.title)) : existing.title,
         subtitle: body.subtitle !== undefined ? sanitizeString(String(body.subtitle)) : existing.subtitle,
-        description: body.description !== undefined ? sanitizeString(String(body.description)) : existing.description,
+        description: body.description !== undefined ? sanitizeString(String(body.description), 3000) : existing.description,
         price: body.price !== undefined ? sanitizeString(String(body.price)) : existing.price,
         imageUrl: body.imageUrl !== undefined ? String(body.imageUrl).trim() : existing.imageUrl,
         fileUrl: body.fileUrl !== undefined ? String(body.fileUrl).trim() : existing.fileUrl,
@@ -370,7 +370,7 @@ export async function PUT(req: NextRequest) {
       where: { id },
       data: {
         nama: body.nama !== undefined ? sanitizeString(String(body.nama)) : undefined,
-        pesan: body.pesan !== undefined ? sanitizeString(String(body.pesan)) : undefined,
+        pesan: body.pesan !== undefined ? sanitizeString(String(body.pesan), 3000) : undefined,
         rating: body.rating !== undefined ? Math.min(5, Math.max(1, Number(body.rating))) : undefined,
         isVisible: body.isVisible !== undefined ? Boolean(body.isVisible) : undefined,
       },
