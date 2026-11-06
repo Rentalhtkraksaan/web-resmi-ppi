@@ -293,6 +293,57 @@ export default function PpiRoadshow27Page() {
     setPostModalOpen(true);
   };
 
+async function compressImageClientSide(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= 250 * 1024) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDimension = 1600;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob && blob.size < file.size) {
+                resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            0.82
+          );
+        } else {
+          resolve(file);
+        }
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
   const handleUploadPostPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -308,17 +359,25 @@ export default function PpiRoadshow27Page() {
     setUploadingPostImg(true);
     try {
       const uploadedUrls: string[] = [];
-      for (const file of selectedFiles) {
-        if (file.size > 5 * 1024 * 1024) {
-          showWarning("File Terlalu Besar", `Foto "${file.name}" melebihi batas 5 MB.`);
+      let lastErrorMessage = "";
+
+      for (const rawFile of selectedFiles) {
+        if (rawFile.size > 10 * 1024 * 1024) {
+          showWarning("File Terlalu Besar", `Foto "${rawFile.name}" melebihi batas 10 MB.`);
           continue;
         }
+
+        const file = await compressImageClientSide(rawFile);
         const formData = new FormData();
         formData.append("file", file);
+
         const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+
         if (res.ok && data.url) {
           uploadedUrls.push(data.url);
+        } else {
+          lastErrorMessage = data.error || `Gagal mengunggah foto "${rawFile.name}".`;
         }
       }
 
@@ -329,6 +388,8 @@ export default function PpiRoadshow27Page() {
           return combined;
         });
         showSuccess("Foto Terunggah", `${uploadedUrls.length} foto dokumentasi berhasil diunggah.`);
+      } else if (lastErrorMessage) {
+        showError("Gagal Mengunggah", lastErrorMessage);
       }
     } catch {
       showError("Gangguan Jaringan", "Gagal mengunggah foto.");

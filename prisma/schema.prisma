@@ -155,7 +155,7 @@ model RoadshowPost {
   date        String   @db.VarChar(100) // e.g. "04 AGUSTUS 2026"
   time        String   @default("08:00 - 12:00 WIB") @db.VarChar(100) // e.g. "08:00 - 11:30 WIB"
   imageUrl    String   @default("") @db.VarChar(1000)
-  imageUrls   String?  @db.Text // JSON Array of up to 5 image URLs
+  imageUrls   String?  @db.LongText // JSON Array of up to 5 image URLs
   summary     String   @default("") @db.VarChar(1500)
   content     String   @default("") @db.VarChar(8000)
   sortOrder   Int      @default(0)
@@ -163,4 +163,13 @@ model RoadshowPost {
   author      String   @default("Penjab Roadshow") @db.VarChar(255)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model UploadedImage {
+  id        String   @id @default(cuid())
+  mimeType  String   @default("image/jpeg") @db.VarChar(100)
+  fileName  String   @default("") @db.VarChar(255)
+  data      String   @db.LongText // Base64 data string
+  size      Int      @default(0)
+  createdAt DateTime @default(now())
 }

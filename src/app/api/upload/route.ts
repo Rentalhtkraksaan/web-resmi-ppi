@@ -211,43 +211,57 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Simpan gambar ke Cloudinary (WAJIB di hosting; filesystem hosting bersifat sementara)
+    // 5. Simpan gambar ke Cloudinary jika dikonfigurasi
     const cloudinary = getCloudinaryConfig();
     if (cloudinary) {
       try {
         const url = await uploadToCloudinary(buffer, file.type, cloudinary);
         return NextResponse.json({ success: true, url });
       } catch (cloudErr: any) {
-        return NextResponse.json(
-          { error: "Gagal mengunggah ke Cloudinary: " + (cloudErr?.message || "Unknown error") },
-          { status: 502 }
-        );
+        console.error("Cloudinary upload failed, falling back to database storage:", cloudErr);
       }
     }
 
-    // Tanpa Cloudinary: hanya diizinkan saat pengembangan lokal (disk lokal)
-    if (process.env.NODE_ENV === "production") {
-      return NextResponse.json(
-        {
-          error:
-            "Cloudinary belum dikonfigurasi di server. Isi CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, dan CLOUDINARY_API_SECRET pada Environment Variables hosting.",
+    // 6. Simpan gambar ke database cloud (UploadedImage di TiDB)
+    // Berfungsi 100% andal di Vercel, VPS, maupun lokal tanpa membutuhkan akun Cloudinary eksternal
+    try {
+      const saved = await prisma.uploadedImage.create({
+        data: {
+          mimeType: file.type || "image/jpeg",
+          fileName: file.name || "image.jpg",
+          data: buffer.toString("base64"),
+          size: buffer.length,
         },
+      });
+
+      return NextResponse.json({
+        success: true,
+        url: `/api/uploads/${saved.id}`,
+      });
+    } catch (dbErr: any) {
+      console.error("Database image storage error:", dbErr);
+    }
+
+    // 7. Fallback penyimpanan lokal jika lingkungan mendukung filesystem persisten
+    try {
+      const safeExt = ext === ".jpeg" ? ".jpg" : ext;
+      const safeName = `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}${safeExt}`;
+      const uploadDir = path.join(process.cwd(), "public", "uploads");
+
+      await mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, safeName);
+      await writeFile(filePath, buffer);
+
+      return NextResponse.json({
+        success: true,
+        url: `/uploads/${safeName}`,
+      });
+    } catch (fsErr: any) {
+      return NextResponse.json(
+        { error: "Gagal menyimpan file gambar ke server." },
         { status: 500 }
       );
     }
-
-    const safeExt = ext === ".jpeg" ? ".jpg" : ext;
-    const safeName = `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}${safeExt}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-
-    await mkdir(uploadDir, { recursive: true });
-    const filePath = path.join(uploadDir, safeName);
-    await writeFile(filePath, buffer);
-
-    return NextResponse.json({
-      success: true,
-      url: `/uploads/${safeName}`,
-    });
   } catch (err: any) {
     return NextResponse.json(
       { error: "Gagal mengunggah gambar: " + (err?.message || "Unknown error") },

@@ -958,6 +958,30 @@ export default function PublicRoadshowPage() {
                 );
               }
 
+              if (selectedPost.status === "SUDAH_DIKUNJUNGI") {
+                return (
+                  <div className="bg-gradient-to-r from-[#062013] via-[#0d3b24] to-[#051a0f] p-6 text-white border-b border-emerald-800/50 relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPost(null)}
+                      className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
+                    >
+                      ✕
+                    </button>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 border border-emerald-500/50 text-emerald-200 mb-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span className="tracking-widest">Sudah Dikunjungi</span>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-white">
+                      {selectedPost.title}
+                    </h3>
+                    <p className="text-xs text-emerald-200 mt-1">
+                      Tanggal Pelaksanaan: <strong>{selectedPost.date || "Selesai"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
+                    </p>
+                  </div>
+                );
+              }
+
               return (
                 <div className="bg-gradient-to-r from-[#0c1a30] via-[#112240] to-[#0a1426] p-6 text-white border-b border-sky-800/40 relative shrink-0">
                   <button
@@ -969,7 +993,7 @@ export default function PublicRoadshowPage() {
                   </button>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/20 border border-sky-400/40 text-sky-300 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                    <span>Agenda Rencana Kunjungan</span>
+                    <span>Akan Dikunjungi</span>
                   </div>
                   <h3 className="text-lg sm:text-xl font-black text-white">
                     {selectedPost.title}
