@@ -28,3 +28,4 @@ export function getRoadshowShareUrl(schoolName?: string, location?: string, fall
       : "https://www.ppikabupatenprobolinggo.id";
   return `${baseUrl}/roadshow/${slug}`;
 }
+

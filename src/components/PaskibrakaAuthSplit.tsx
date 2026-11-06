@@ -849,7 +849,7 @@ export default function PaskibrakaAuthSplit({
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
-                        ✓
+                        2
                       </span>
                       <span className="text-xs font-bold text-slate-800">
                         Step 2: Kontak &amp; Password
@@ -996,24 +996,24 @@ export default function PaskibrakaAuthSplit({
 
                     {/* Realtime Password Checklist Visual Badges */}
                     <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-1.5 text-[11px]">
-                      <span className={`flex items-center gap-1 font-semibold ${pwdHasMinLen ? "text-emerald-600" : "text-slate-400"}`}>
-                        <span>{pwdHasMinLen ? "✓" : "○"}</span>
+                      <span className={`flex items-center gap-1.5 font-semibold ${pwdHasMinLen ? "text-emerald-700" : "text-slate-400"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 transition ${pwdHasMinLen ? "bg-emerald-500 shadow-sm" : "bg-slate-300"}`} />
                         <span>8 - 20 Karakter</span>
                       </span>
-                      <span className={`flex items-center gap-1 font-semibold ${pwdHasUpper ? "text-emerald-600" : "text-slate-400"}`}>
-                        <span>{pwdHasUpper ? "✓" : "○"}</span>
+                      <span className={`flex items-center gap-1.5 font-semibold ${pwdHasUpper ? "text-emerald-700" : "text-slate-400"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 transition ${pwdHasUpper ? "bg-emerald-500 shadow-sm" : "bg-slate-300"}`} />
                         <span>Huruf Besar (A-Z)</span>
                       </span>
-                      <span className={`flex items-center gap-1 font-semibold ${pwdHasLower ? "text-emerald-600" : "text-slate-400"}`}>
-                        <span>{pwdHasLower ? "✓" : "○"}</span>
+                      <span className={`flex items-center gap-1.5 font-semibold ${pwdHasLower ? "text-emerald-700" : "text-slate-400"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 transition ${pwdHasLower ? "bg-emerald-500 shadow-sm" : "bg-slate-300"}`} />
                         <span>Huruf Kecil (a-z)</span>
                       </span>
-                      <span className={`flex items-center gap-1 font-semibold ${pwdHasNumber ? "text-emerald-600" : "text-slate-400"}`}>
-                        <span>{pwdHasNumber ? "✓" : "○"}</span>
+                      <span className={`flex items-center gap-1.5 font-semibold ${pwdHasNumber ? "text-emerald-700" : "text-slate-400"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 transition ${pwdHasNumber ? "bg-emerald-500 shadow-sm" : "bg-slate-300"}`} />
                         <span>Angka (0-9)</span>
                       </span>
-                      <span className={`col-span-2 flex items-center gap-1 font-semibold ${pwdHasSymbol ? "text-emerald-600" : "text-slate-400"}`}>
-                        <span>{pwdHasSymbol ? "✓" : "○"}</span>
+                      <span className={`col-span-2 flex items-center gap-1.5 font-semibold ${pwdHasSymbol ? "text-emerald-700" : "text-slate-400"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 transition ${pwdHasSymbol ? "bg-emerald-500 shadow-sm" : "bg-slate-300"}`} />
                         <span>Ikon / Simbol Unik (!@#$% dll.)</span>
                       </span>
                     </div>

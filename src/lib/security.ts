@@ -195,7 +195,7 @@ const WAF_PATTERNS = [
   /<\?php|<\?=/i,
   /(\b(SELECT|UNION|INSERT|UPDATE|DELETE|DROP|ALTER|EXEC|EXECUTE|SLEEP|BENCHMARK|EXTRACTVALUE|UPDATEXML)\b\s+(ALL|FROM|INTO|TABLE|DATABASE|\())/i,
   /('|\bOR\b|\bAND\b)\s*['"]?[a-zA-Z0-9_]+['"]?\s*=\s*['"]?[a-zA-Z0-9_]+/i,
-  /(--|#|\/\*|\*\/)/m,
+  /(--\s+|;\s*--|\/\*[\s\S]*?\*\/)/m,
   /;\s*(DROP|DELETE|UPDATE|INSERT|SELECT|SHUTDOWN)\b/i,
   /\b(INFORMATION_SCHEMA|SYS\.TABLES|XP_CMDSHELL|LOAD_FILE|INTO\s+OUTFILE|INTO\s+DUMPFILE)\b/i,
   /<\s*script\b[^>]*>/i,
@@ -204,8 +204,28 @@ const WAF_PATTERNS = [
   /(__proto__|constructor\s*\[|prototype\s*\[)/i,
 ];
 
+function cleanPayloadForInspection(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== "object") return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(cleanPayloadForInspection);
+  }
+
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    // Exclude password and credential fields which legitimately contain complex symbols (!@#$%^&* dll.)
+    if (/^(password|newPassword|currentPassword|confirmPassword|newPasswordConfirm|pass)$/i.test(key)) {
+      continue;
+    }
+    result[key] = cleanPayloadForInspection(obj[key]);
+  }
+  return result;
+}
+
 export function inspectPayloadForAttacks(input: unknown): { safe: boolean; reason?: string } {
-  const serialized = typeof input === "string" ? input : JSON.stringify(input || "");
+  const sanitizedInput = cleanPayloadForInspection(input);
+  const serialized = typeof sanitizedInput === "string" ? sanitizedInput : JSON.stringify(sanitizedInput || "");
   for (const pattern of WAF_PATTERNS) {
     if (pattern.test(serialized)) {
       if (pattern.source.includes("php")) {
