@@ -316,16 +316,13 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
                   alt={post.title}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-4 sm:p-6 text-white flex items-end justify-between">
-                  <p className="text-xs sm:text-sm font-semibold drop-shadow">
-                    Dokumentasi resmi Roadshow PPI Kab. Probolinggo di {post.schoolName}
-                  </p>
-                  {postPhotos.length > 1 && (
-                    <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold shrink-0">
+                {postPhotos.length > 1 && (
+                  <div className="absolute top-3 right-3">
+                    <span className="px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-[11px] font-bold shadow">
                       1 / {postPhotos.length} Foto
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Grid foto tambahan jika lebih dari 1 foto (maks. 5 foto) */}
@@ -341,9 +338,6 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
                         alt={`Dokumentasi ${idx + 2} - ${post.title}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                       />
-                      <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-bold">
-                        Foto #{idx + 2}
-                      </div>
                     </div>
                   ))}
                 </div>

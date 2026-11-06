@@ -864,69 +864,84 @@ export default function PublicRoadshowPage() {
 
               if (modalPhotos.length > 0) {
                 return (
-                  <div className="relative aspect-[16/9] bg-slate-900 shrink-0">
-                    <img
-                      src={modalPhotos[activeModalPhotoIndex] || modalPhotos[0]}
-                      alt={selectedPost.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPost(null)}
-                      className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition z-10"
-                    >
-                      ✕
-                    </button>
+                  <div className="bg-black shrink-0 relative flex flex-col">
+                    {/* Main Clean Photo View (NO TEXT BLOCKING THE PHOTO) */}
+                    <div className="relative w-full max-h-[55vh] min-h-[240px] flex items-center justify-center bg-black overflow-hidden">
+                      <img
+                        src={modalPhotos[activeModalPhotoIndex] || modalPhotos[0]}
+                        alt={selectedPost.title}
+                        className="w-full max-h-[55vh] object-contain"
+                      />
 
-                    {modalPhotos.length > 1 && (
-                      <div className="absolute top-4 left-4 z-10">
-                        <span className="px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-[10px] font-bold">
-                          Foto {activeModalPhotoIndex + 1} / {modalPhotos.length}
-                        </span>
-                      </div>
-                    )}
+                      {/* Close Button Top Right */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPost(null)}
+                        className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/75 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-md transition z-20"
+                        title="Tutup"
+                      >
+                        ✕
+                      </button>
 
-                    <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col gap-2">
+                      {/* Counter Badge Top Left */}
                       {modalPhotos.length > 1 && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                          {modalPhotos.map((img, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => setActiveModalPhotoIndex(i)}
-                              className={`w-12 h-8 rounded-lg overflow-hidden border-2 transition shrink-0 ${
-                                activeModalPhotoIndex === i
-                                  ? "border-emerald-400 scale-105"
-                                  : "border-white/40 opacity-70 hover:opacity-100"
-                              }`}
-                            >
-                              <img src={img} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
-                            </button>
-                          ))}
+                        <div className="absolute top-3 left-3 z-20">
+                          <span className="px-2.5 py-1 rounded-full bg-black/75 text-white text-[10px] font-bold">
+                            Foto {activeModalPhotoIndex + 1} / {modalPhotos.length}
+                          </span>
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between text-xs text-white">
-                        <span
-                          className={`px-3 py-1 font-bold uppercase tracking-wider rounded-md text-[11px] ${
-                            selectedPost.status === "SEDANG_BERLANGSUNG"
-                              ? "bg-red-600 text-white"
-                              : selectedPost.status === "SUDAH_DIKUNJUNGI"
-                              ? "bg-emerald-600 text-white"
-                              : "bg-sky-600 text-white"
-                          }`}
-                        >
-                          {selectedPost.status === "SEDANG_BERLANGSUNG"
-                            ? "Sedang Berlangsung"
-                            : selectedPost.status === "SUDAH_DIKUNJUNGI"
-                            ? "Sudah Dikunjungi"
-                            : "Akan Dikunjungi"}
-                        </span>
-                        <span className="font-semibold text-zinc-200">
-                          {selectedPost.date || "Agustus 2026"} • {selectedPost.time || "08:00 - 12:00 WIB"}
-                        </span>
-                      </div>
+                      {/* Prev / Next Arrows for Gallery */}
+                      {modalPhotos.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveModalPhotoIndex((prev) =>
+                                prev > 0 ? prev - 1 : modalPhotos.length - 1
+                              )
+                            }
+                            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center text-lg font-bold shadow-md transition z-20 active:scale-95"
+                            title="Foto Sebelumnya"
+                          >
+                            ‹
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveModalPhotoIndex((prev) =>
+                                prev < modalPhotos.length - 1 ? prev + 1 : 0
+                              )
+                            }
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center text-lg font-bold shadow-md transition z-20 active:scale-95"
+                            title="Foto Berikutnya"
+                          >
+                            ›
+                          </button>
+                        </>
+                      )}
                     </div>
+
+                    {/* Clean Thumbnails Strip Below the Photo (NOT OVERLAYING THE PHOTO) */}
+                    {modalPhotos.length > 1 && (
+                      <div className="bg-zinc-950 px-4 py-2 flex items-center justify-center gap-2 overflow-x-auto border-t border-zinc-800">
+                        {modalPhotos.map((img, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setActiveModalPhotoIndex(i)}
+                            className={`w-14 h-10 rounded-lg overflow-hidden border-2 transition shrink-0 ${
+                              activeModalPhotoIndex === i
+                                ? "border-emerald-500 scale-105 shadow-md shadow-emerald-500/20"
+                                : "border-zinc-700 opacity-60 hover:opacity-100"
+                            }`}
+                          >
+                            <img src={img} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               }
