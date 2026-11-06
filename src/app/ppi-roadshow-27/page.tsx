@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import jsQR from "jsqr";
 import PaskibrakaAuthSplit from "@/components/PaskibrakaAuthSplit";
 import { toRoadshowSlug } from "@/lib/slug";
+import { resolveAutoPostStatus } from "@/lib/roadshowSchedule";
 import { showConfirm, showError, showSuccess, showWarning } from "@/lib/swal";
 import {
   ArrowLeft,
@@ -72,6 +73,8 @@ interface RoadshowPost {
   date: string;
   time?: string;
   imageUrl: string;
+  imageUrls?: string;
+  imageUrlsList?: string[];
   summary: string;
   content: string;
   sortOrder: number;
@@ -126,10 +129,12 @@ export default function PpiRoadshow27Page() {
   const [postFormDate, setPostFormDate] = useState("");
   const [postFormTime, setPostFormTime] = useState("08:00 - 12:00 WIB");
   const [postFormImage, setPostFormImage] = useState("");
+  const [postFormImages, setPostFormImages] = useState<string[]>([]);
   const [postFormSummary, setPostFormSummary] = useState("");
   const [postFormContent, setPostFormContent] = useState("");
   const [postFormSaving, setPostFormSaving] = useState(false);
   const [uploadingPostImg, setUploadingPostImg] = useState(false);
+  const [regSubmitting, setRegSubmitting] = useState(false);
 
   // Super Admin QR Modal State
   const [qrModalSchool, setQrModalSchool] = useState<RoadshowSchool | null>(null);
@@ -210,7 +215,13 @@ export default function PpiRoadshow27Page() {
         const postsRes = await fetch("/api/roadshow?mode=posts", { cache: "no-store" });
         if (postsRes.ok) {
           const pData = await postsRes.json();
-          setPosts(pData.posts || []);
+          const rawPosts: RoadshowPost[] = pData.posts || [];
+          setPosts(
+            rawPosts.map((p) => ({
+              ...p,
+              status: resolveAutoPostStatus(p),
+            }))
+          );
         }
       } catch { }
     } finally {
@@ -223,7 +234,13 @@ export default function PpiRoadshow27Page() {
       const postsRes = await fetch("/api/roadshow?mode=posts", { cache: "no-store" });
       if (postsRes.ok) {
         const pData = await postsRes.json();
-        setPosts(pData.posts || []);
+        const rawPosts: RoadshowPost[] = pData.posts || [];
+        setPosts(
+          rawPosts.map((p) => ({
+            ...p,
+            status: resolveAutoPostStatus(p),
+          }))
+        );
       }
     } catch { }
   };
@@ -240,6 +257,7 @@ export default function PpiRoadshow27Page() {
     );
     setPostFormTime("08:00 - 12:00 WIB");
     setPostFormImage("");
+    setPostFormImages([]);
     setPostFormSummary("");
     setPostFormContent("");
     setPostModalOpen(true);
@@ -254,36 +272,78 @@ export default function PpiRoadshow27Page() {
     setPostFormLocation(p.location);
     setPostFormDate(p.date);
     setPostFormTime(p.time || "08:00 - 12:00 WIB");
-    setPostFormImage(p.imageUrl);
+    setPostFormImage(p.imageUrl || "");
+
+    let initialImgs: string[] = [];
+    if (p.imageUrlsList && Array.isArray(p.imageUrlsList)) {
+      initialImgs = p.imageUrlsList;
+    } else if (p.imageUrls) {
+      try {
+        initialImgs = JSON.parse(p.imageUrls);
+      } catch {
+        initialImgs = p.imageUrl ? [p.imageUrl] : [];
+      }
+    } else if (p.imageUrl) {
+      initialImgs = [p.imageUrl];
+    }
+    setPostFormImages(initialImgs.filter(Boolean).slice(0, 5));
+
     setPostFormSummary(p.summary);
     setPostFormContent(p.content);
     setPostModalOpen(true);
   };
 
   const handleUploadPostPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      showWarning("Ukuran File Terlalu Besar", "Maksimal ukuran foto adalah 5 MB.");
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (postFormImages.length >= 5) {
+      showWarning("Batas Maksimal Foto", "Maksimal 5 foto dokumentasi untuk setiap berita.");
       return;
     }
+
+    const remainingSlots = 5 - postFormImages.length;
+    const selectedFiles = Array.from(files).slice(0, remainingSlots);
+
     setUploadingPostImg(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      if (res.ok && data.url) {
-        setPostFormImage(data.url);
-        showSuccess("Foto Terunggah", "Foto berita berhasil diunggah.");
-      } else {
-        showError("Gagal Upload", data.error || "Gagal mengunggah foto.");
+      const uploadedUrls: string[] = [];
+      for (const file of selectedFiles) {
+        if (file.size > 5 * 1024 * 1024) {
+          showWarning("File Terlalu Besar", `Foto "${file.name}" melebihi batas 5 MB.`);
+          continue;
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          uploadedUrls.push(data.url);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        setPostFormImages((prev) => {
+          const combined = [...prev, ...uploadedUrls].slice(0, 5);
+          if (combined[0]) setPostFormImage(combined[0]);
+          return combined;
+        });
+        showSuccess("Foto Terunggah", `${uploadedUrls.length} foto dokumentasi berhasil diunggah.`);
       }
     } catch {
       showError("Gangguan Jaringan", "Gagal mengunggah foto.");
     } finally {
       setUploadingPostImg(false);
+      e.target.value = "";
     }
+  };
+
+  const handleRemovePostPhoto = (index: number) => {
+    setPostFormImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      setPostFormImage(next[0] || "");
+      return next;
+    });
   };
 
   const handleSavePost = async (e: React.FormEvent) => {
@@ -295,6 +355,7 @@ export default function PpiRoadshow27Page() {
     setPostFormSaving(true);
     try {
       const isEdit = Boolean(editingPost);
+      const primaryPhoto = postFormImages[0] || postFormImage.trim();
       const res = await fetch("/api/roadshow", {
         method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,11 +365,13 @@ export default function PpiRoadshow27Page() {
           title: postFormTitle.trim(),
           status: postFormStatus,
           category: postFormCategory,
+          schoolId: activeSchoolId || undefined,
           schoolName: postFormSchool.trim(),
           location: postFormLocation.trim(),
           date: postFormDate.trim(),
           time: postFormTime.trim(),
-          imageUrl: postFormImage.trim(),
+          imageUrl: primaryPhoto,
+          imageUrls: postFormImages,
           summary: postFormSummary.trim(),
           content: postFormContent.trim(),
           isPublished: true,
@@ -684,30 +747,52 @@ export default function PpiRoadshow27Page() {
 
   const handleRegisterCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeSchoolId || !regNama.trim()) return;
-    const res = await fetch("/api/roadshow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "register_candidate",
-        schoolId: activeSchoolId,
-        nama: regNama.trim(),
-        jenisKelamin: regGender,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.error || "Gagal mendaftarkan peserta");
-      if (res.status === 403 && !isAdminRoadshow) {
-        setQrVerified(false);
-        setActiveSchoolId("");
-        setCandidates([]);
-      }
+    const cleanName = regNama.trim();
+    if (!activeSchoolId || !cleanName || regSubmitting) return;
+
+    // CEK DATA DOUBLE DI CLIENT: Hindari pendaftaran nama yang sama di sekolah yang sama
+    const isDuplicate = candidates.some(
+      (c) => c.nama.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (isDuplicate) {
+      showWarning(
+        "Data Ganda Terdeteksi",
+        `Peserta dengan nama "${cleanName}" sudah terdaftar di sekolah ini!`
+      );
       return;
     }
-    setRegNama("");
-    setLastCreatedCode(data.candidate.kodePeserta);
-    loadRoadshowData(activeSchoolId);
+
+    setRegSubmitting(true);
+    try {
+      const res = await fetch("/api/roadshow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_candidate",
+          schoolId: activeSchoolId,
+          nama: cleanName,
+          jenisKelamin: regGender,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError("Gagal Mendaftar", data.error || "Gagal mendaftarkan peserta");
+        if (res.status === 403 && !isAdminRoadshow) {
+          setQrVerified(false);
+          setActiveSchoolId("");
+          setCandidates([]);
+        }
+        return;
+      }
+      setRegNama("");
+      setLastCreatedCode(data.candidate.kodePeserta);
+      showSuccess("Pendaftaran Berhasil", `Peserta "${cleanName}" berhasil didaftarkan (Kode: ${data.candidate.kodePeserta}).`);
+      loadRoadshowData(activeSchoolId);
+    } catch {
+      showError("Gangguan Jaringan", "Gagal menghubungi server untuk mendaftar.");
+    } finally {
+      setRegSubmitting(false);
+    }
   };
 
   const handleSaveBbTb = async (candidateId: string, field: "beratBadan" | "tinggiBadan", value: string) => {
@@ -1673,9 +1758,10 @@ export default function PpiRoadshow27Page() {
 
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-xs uppercase tracking-wider"
+                  disabled={regSubmitting}
+                  className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold text-xs uppercase tracking-wider transition"
                 >
-                  Daftarkan Peserta
+                  {regSubmitting ? "Memproses Pendaftaran..." : "Daftarkan Peserta"}
                 </button>
               </form>
 
@@ -2473,45 +2559,62 @@ export default function PpiRoadshow27Page() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Upload Foto Dokumentasi Lapangan <span className="text-red-400">*</span>
-                  </label>
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadPostPhoto}
-                      disabled={uploadingPostImg}
-                      className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer"
-                    />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-zinc-300 font-semibold text-xs">
+                      Foto Dokumentasi Acara (Maks. 5 Foto)
+                    </label>
+                    <span className="text-[11px] font-mono font-bold text-zinc-400">
+                      {postFormImages.length}/5 Foto Terunggah
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5">
+                    {postFormImages.length < 5 && (
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleUploadPostPhoto}
+                        disabled={uploadingPostImg || postFormImages.length >= 5}
+                        className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer"
+                      />
+                    )}
+
                     {uploadingPostImg && (
                       <span className="text-[11px] text-amber-400 font-semibold animate-pulse">
-                        Mengunggah gambar ke server...
+                        Mengunggah foto ke server...
                       </span>
                     )}
-                    {postFormImage ? (
-                      <div className="relative rounded-xl overflow-hidden border border-zinc-700 max-h-40 bg-black">
-                        <img
-                          src={postFormImage}
-                          alt="Preview Foto Berita"
-                          className="w-full h-36 object-cover"
-                        />
-                        <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-bold">
-                            Terpasang
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setPostFormImage("")}
-                            className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold shadow transition-colors"
+
+                    {postFormImages.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {postFormImages.map((imgUrl, idx) => (
+                          <div
+                            key={idx}
+                            className="relative rounded-xl overflow-hidden border border-zinc-700 bg-black aspect-[4/3] group"
                           >
-                            Hapus
-                          </button>
-                        </div>
+                            <img
+                              src={imgUrl}
+                              alt={`Foto ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-bold">
+                              {idx === 0 ? "Utama" : `#${idx + 1}`}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePostPhoto(idx)}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow transition"
+                              title="Hapus foto ini"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <p className="text-[11px] text-zinc-500 italic">
-                        Belum ada foto dokumentasi lapangan. Silakan unggah foto kegiatan.
+                        Belum ada foto dokumentasi. Anda dapat mengunggah hingga 5 foto kegiatan roadshow.
                       </p>
                     )}
                   </div>

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { toRoadshowSlug, getRoadshowShareUrl } from "@/lib/slug";
+import { resolveAutoPostStatus } from "@/lib/roadshowSchedule";
 import RoadshowShareWidget from "@/components/RoadshowShareWidget";
 
 interface PageProps {
@@ -88,6 +89,7 @@ async function getPostAndSchoolBySlug(rawSlug: string) {
         date: matchedSchool.tanggal || "Agustus 2026",
         time: "08:00 - 12:00 WIB",
         imageUrl: matchedSchool.documentationPhoto || "",
+        imageUrls: null,
         summary: `Liputan resmi kegiatan Roadshow Paskibraka Kabupaten Probolinggo di ${matchedSchool.namaSekolah}.`,
         content: `Tim Purna Paskibraka Indonesia (PPI) Kabupaten Probolinggo menyelenggarakan kegiatan Roadshow Sosialisasi dan Pra-Seleksi Calon Paskibraka di ${matchedSchool.namaSekolah}, berlokasi di ${matchedSchool.lokasi}. Kegiatan ini bertujuan untuk menjaring calon pandu pertiwi berkarakter, berdedikasi tinggi, dan memenuhi standar fisik serta wawasan kebangsaan.`,
         sortOrder: matchedSchool.sortOrder,
@@ -166,12 +168,24 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const isSudah = post.status === "SUDAH_DIKUNJUNGI";
-  const isSedang = post.status === "SEDANG_BERLANGSUNG";
+  const resolvedStatus = resolveAutoPostStatus(post);
+  const isSudah = resolvedStatus === "SUDAH_DIKUNJUNGI";
+  const isSedang = resolvedStatus === "SEDANG_BERLANGSUNG";
   const shareSlug = toRoadshowSlug(post.schoolName, post.location) || params.slug;
   const canonicalUrl = `https://www.ppikabupatenprobolinggo.id/roadshow/${shareSlug}`;
 
   const passedCandidates = school?.candidates || [];
+
+  let postPhotos: string[] = [];
+  if (post.imageUrls) {
+    try {
+      const parsed = JSON.parse(post.imageUrls);
+      if (Array.isArray(parsed) && parsed.length > 0) postPhotos = parsed.filter(Boolean).slice(0, 5);
+    } catch {}
+  }
+  if (postPhotos.length === 0 && post.imageUrl) {
+    postPhotos = [post.imageUrl];
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col selection:bg-red-600 selection:text-white">
@@ -293,21 +307,47 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Documentation Photo */}
-          {post.imageUrl && (
-            <div className="space-y-2">
+          {/* Documentation Photos Gallery (Up to 5 Photos) */}
+          {postPhotos.length > 0 && (
+            <div className="space-y-3">
               <div className="relative aspect-[16/10] sm:aspect-[16/9] w-full rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-200">
                 <img
-                  src={post.imageUrl}
+                  src={postPhotos[0]}
                   alt={post.title}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-4 sm:p-6 text-white">
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-4 sm:p-6 text-white flex items-end justify-between">
                   <p className="text-xs sm:text-sm font-semibold drop-shadow">
                     Dokumentasi resmi Roadshow PPI Kab. Probolinggo di {post.schoolName}
                   </p>
+                  {postPhotos.length > 1 && (
+                    <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold shrink-0">
+                      1 / {postPhotos.length} Foto
+                    </span>
+                  )}
                 </div>
               </div>
+
+              {/* Grid foto tambahan jika lebih dari 1 foto (maks. 5 foto) */}
+              {postPhotos.length > 1 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  {postPhotos.slice(1).map((photoUrl, idx) => (
+                    <div
+                      key={idx}
+                      className="relative rounded-xl overflow-hidden aspect-[4/3] bg-slate-900 border border-slate-200 shadow-sm group"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Dokumentasi ${idx + 2} - ${post.title}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                      />
+                      <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-bold">
+                        Foto #{idx + 2}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

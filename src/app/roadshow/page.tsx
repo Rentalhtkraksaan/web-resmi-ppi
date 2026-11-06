@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useLive } from "@/lib/useLive";
 import Link from "next/link";
 import { toRoadshowSlug } from "@/lib/slug";
+import { resolveAutoPostStatus } from "@/lib/roadshowSchedule";
 import RoadshowShareWidget from "@/components/RoadshowShareWidget";
 
 interface PassedCandidate {
@@ -39,6 +40,8 @@ interface RoadshowPost {
   date: string;
   time?: string;
   imageUrl: string;
+  imageUrls?: string;
+  imageUrlsList?: string[];
   summary: string;
   content: string;
   sortOrder: number;
@@ -59,6 +62,7 @@ export default function PublicRoadshowPage() {
   const [postFilter, setPostFilter] = useState<"ALL" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI" | "SUDAH_DIKUNJUNGI">("ALL");
   const [searchPostQuery, setSearchPostQuery] = useState("");
   const [selectedPost, setSelectedPost] = useState<RoadshowPost | null>(null);
+  const [activeModalPhotoIndex, setActiveModalPhotoIndex] = useState(0);
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
 
   const handleCopyPostLink = async (e: React.MouseEvent, post: RoadshowPost) => {
@@ -97,8 +101,13 @@ export default function PublicRoadshowPage() {
       const res = await fetch("/api/roadshow?mode=public", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
+        const rawPosts: RoadshowPost[] = data.posts || [];
+        const resolvedPosts = rawPosts.map((p) => ({
+          ...p,
+          status: resolveAutoPostStatus(p),
+        }));
         setSchools(data.schools || []);
-        setPosts(data.posts || []);
+        setPosts(resolvedPosts);
       }
     } finally {
       setLoading(false);
@@ -451,7 +460,10 @@ export default function PublicRoadshowPage() {
                 return (
                   <article
                     key={post.id}
-                    onClick={() => setSelectedPost(post)}
+                    onClick={() => {
+                      setActiveModalPhotoIndex(0);
+                      setSelectedPost(post);
+                    }}
                     className="group bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between cursor-pointer border border-zinc-200 hover:-translate-y-1 text-slate-800"
                   >
                     <div>
@@ -835,77 +847,139 @@ export default function PublicRoadshowPage() {
       {selectedPost && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl max-h-[90vh] flex flex-col my-auto border border-zinc-200">
-            {/* Header: Photo ONLY if SUDAH_DIKUNJUNGI */}
-            {selectedPost.status === "SUDAH_DIKUNJUNGI" && selectedPost.imageUrl ? (
-              <div className="relative aspect-[16/9] bg-slate-900 shrink-0">
-                <img
-                  src={selectedPost.imageUrl}
-                  alt={selectedPost.title}
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => setSelectedPost(null)}
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
-                >
-                  ✕
-                </button>
+            {/* Header: Photo Gallery (Up to 5 Photos) or Gradient Status Header */}
+            {(() => {
+              let modalPhotos: string[] = [];
+              if (selectedPost.imageUrlsList && Array.isArray(selectedPost.imageUrlsList)) {
+                modalPhotos = selectedPost.imageUrlsList.filter(Boolean).slice(0, 5);
+              } else if (selectedPost.imageUrls) {
+                try {
+                  const parsed = JSON.parse(selectedPost.imageUrls);
+                  if (Array.isArray(parsed) && parsed.length > 0) modalPhotos = parsed.filter(Boolean).slice(0, 5);
+                } catch {}
+              }
+              if (modalPhotos.length === 0 && selectedPost.imageUrl) {
+                modalPhotos = [selectedPost.imageUrl];
+              }
 
-                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between text-xs text-white">
-                  <span className="px-3 py-1 bg-emerald-600 text-white font-bold uppercase tracking-wider rounded-md text-[11px]">
-                    Sudah Dikunjungi
-                  </span>
-                  <span className="font-semibold text-zinc-200">
-                    {selectedPost.date || "Agustus 2026"} • {selectedPost.time || "08:00 - 12:00 WIB"}
-                  </span>
+              if (modalPhotos.length > 0) {
+                return (
+                  <div className="relative aspect-[16/9] bg-slate-900 shrink-0">
+                    <img
+                      src={modalPhotos[activeModalPhotoIndex] || modalPhotos[0]}
+                      alt={selectedPost.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPost(null)}
+                      className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition z-10"
+                    >
+                      ✕
+                    </button>
+
+                    {modalPhotos.length > 1 && (
+                      <div className="absolute top-4 left-4 z-10">
+                        <span className="px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-[10px] font-bold">
+                          Foto {activeModalPhotoIndex + 1} / {modalPhotos.length}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col gap-2">
+                      {modalPhotos.length > 1 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                          {modalPhotos.map((img, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setActiveModalPhotoIndex(i)}
+                              className={`w-12 h-8 rounded-lg overflow-hidden border-2 transition shrink-0 ${
+                                activeModalPhotoIndex === i
+                                  ? "border-emerald-400 scale-105"
+                                  : "border-white/40 opacity-70 hover:opacity-100"
+                              }`}
+                            >
+                              <img src={img} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-xs text-white">
+                        <span
+                          className={`px-3 py-1 font-bold uppercase tracking-wider rounded-md text-[11px] ${
+                            selectedPost.status === "SEDANG_BERLANGSUNG"
+                              ? "bg-red-600 text-white"
+                              : selectedPost.status === "SUDAH_DIKUNJUNGI"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-sky-600 text-white"
+                          }`}
+                        >
+                          {selectedPost.status === "SEDANG_BERLANGSUNG"
+                            ? "Sedang Berlangsung"
+                            : selectedPost.status === "SUDAH_DIKUNJUNGI"
+                            ? "Sudah Dikunjungi"
+                            : "Akan Dikunjungi"}
+                        </span>
+                        <span className="font-semibold text-zinc-200">
+                          {selectedPost.date || "Agustus 2026"} • {selectedPost.time || "08:00 - 12:00 WIB"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (selectedPost.status === "SEDANG_BERLANGSUNG") {
+                return (
+                  <div className="bg-gradient-to-r from-[#200508] via-[#33090e] to-[#1a0407] p-6 text-white border-b border-red-800/50 relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPost(null)}
+                      className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
+                    >
+                      ✕
+                    </button>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/25 border border-red-500/50 text-red-200 mb-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 duration-1000" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                      </span>
+                      <span className="tracking-widest">Sedang Berlangsung Hari Ini</span>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-white">
+                      {selectedPost.title}
+                    </h3>
+                    <p className="text-xs text-red-200 mt-1">
+                      Tanggal: <strong>{selectedPost.date || "Hari Ini"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="bg-gradient-to-r from-[#0c1a30] via-[#112240] to-[#0a1426] p-6 text-white border-b border-sky-800/40 relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPost(null)}
+                    className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
+                  >
+                    ✕
+                  </button>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/20 border border-sky-400/40 text-sky-300 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                    <span>Agenda Rencana Kunjungan</span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-white">
+                    {selectedPost.title}
+                  </h3>
+                  <p className="text-xs text-sky-200 mt-1">
+                    Tanggal Rencana: <strong>{selectedPost.date || "Segera"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
+                  </p>
                 </div>
-              </div>
-            ) : selectedPost.status === "SEDANG_BERLANGSUNG" ? (
-              /* Header Modal untuk SEDANG_BERLANGSUNG (Kedip Merah Pelan) */
-              <div className="bg-gradient-to-r from-[#200508] via-[#33090e] to-[#1a0407] p-6 text-white border-b border-red-800/50 relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPost(null)}
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
-                >
-                  ✕
-                </button>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/25 border border-red-500/50 text-red-200 mb-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 duration-1000" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                  </span>
-                  <span className="tracking-widest">Sedang Berlangsung Hari Ini</span>
-                </div>
-                <h3 className="text-lg sm:text-xl font-black text-white">
-                  {selectedPost.title}
-                </h3>
-                <p className="text-xs text-red-200 mt-1">
-                  Tanggal: <strong>{selectedPost.date || "Hari Ini"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
-                </p>
-              </div>
-            ) : (
-              /* Header Modal Tanpa Foto untuk AKAN_DIKUNJUNGI */
-              <div className="bg-gradient-to-r from-[#0c1a30] via-[#112240] to-[#0a1426] p-6 text-white border-b border-sky-800/40 relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPost(null)}
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
-                >
-                  ✕
-                </button>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/20 border border-sky-400/40 text-sky-300 mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                  <span>Agenda Rencana Kunjungan</span>
-                </div>
-                <h3 className="text-lg sm:text-xl font-black text-white">
-                  {selectedPost.title}
-                </h3>
-                <p className="text-xs text-sky-200 mt-1">
-                  Tanggal Rencana: <strong>{selectedPost.date || "Segera"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
-                </p>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Content Body */}
             <div className="p-6 sm:p-8 overflow-y-auto space-y-4">

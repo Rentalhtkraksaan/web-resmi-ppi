@@ -10,6 +10,7 @@ import {
   verifySchoolQrToken,
 } from "@/lib/security";
 import { firebaseDelete, firebasePush, firebasePut, ROADSHOW_RTDB_URL } from "@/lib/firebase";
+import { resolveAutoPostStatus } from "@/lib/roadshowSchedule";
 
 function generateRandomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -177,7 +178,20 @@ export async function GET(req: NextRequest) {
         candidates: s.candidates,
       })),
       schedule: allSchoolsForSchedule,
-      posts,
+      posts: posts.map((p) => {
+        const resolvedStatus = resolveAutoPostStatus(p);
+        let parsedImages: string[] = [];
+        try {
+          parsedImages = p.imageUrls ? JSON.parse(p.imageUrls) : (p.imageUrl ? [p.imageUrl] : []);
+        } catch {
+          parsedImages = p.imageUrl ? [p.imageUrl] : [];
+        }
+        return {
+          ...p,
+          status: resolvedStatus,
+          imageUrlsList: parsedImages,
+        };
+      }),
     });
   }
 
@@ -190,9 +204,23 @@ export async function GET(req: NextRequest) {
     if (status && status !== "ALL") {
       where.status = status;
     }
-    const posts = await prisma.roadshowPost.findMany({
+    const rawPosts = await prisma.roadshowPost.findMany({
       where,
       orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+    });
+    const posts = rawPosts.map((p) => {
+      const resolvedStatus = resolveAutoPostStatus(p);
+      let parsedImages: string[] = [];
+      try {
+        parsedImages = p.imageUrls ? JSON.parse(p.imageUrls) : (p.imageUrl ? [p.imageUrl] : []);
+      } catch {
+        parsedImages = p.imageUrl ? [p.imageUrl] : [];
+      }
+      return {
+        ...p,
+        status: resolvedStatus,
+        imageUrlsList: parsedImages,
+      };
     });
     return NextResponse.json({ posts });
   }
@@ -478,11 +506,27 @@ export async function POST(req: NextRequest) {
     }
 
     const schoolId = String(body.schoolId || "");
-    const nama = sanitizeString(String(body.nama || ""));
+    const nama = sanitizeString(String(body.nama || "")).trim();
     const jenisKelamin = body.jenisKelamin === "Cewek" ? "Cewek" : "Cowok";
 
     if (!schoolId || !nama) {
       return NextResponse.json({ error: "Sekolah dan nama peserta wajib diisi." }, { status: 400 });
+    }
+
+    // CEK DATA DOUBLE: Cegah nama peserta yang sama terdaftar dua kali di sekolah yang sama
+    const existingCandidate = await prisma.roadshowCandidate.findFirst({
+      where: {
+        schoolId,
+        nama,
+      },
+    });
+    if (existingCandidate) {
+      return NextResponse.json(
+        {
+          error: `Peserta dengan nama "${nama}" sudah terdaftar di sekolah ini dengan Kode ${existingCandidate.kodePeserta}!`,
+        },
+        { status: 400 }
+      );
     }
 
     const school = await prisma.roadshowSchool.findUnique({ where: { id: schoolId } });
@@ -648,6 +692,14 @@ export async function POST(req: NextRequest) {
     const postStatus = validStatuses.includes(body.status) ? body.status : "AKAN_DIKUNJUNGI";
     const postTime = sanitizeString(String(body.time || "08:00 - 12:00 WIB")).trim();
 
+    let postImageUrls: string[] = [];
+    if (Array.isArray(body.imageUrls)) {
+      postImageUrls = body.imageUrls.map((u: any) => String(u || "").trim()).filter(Boolean).slice(0, 5);
+    } else if (body.imageUrl) {
+      postImageUrls = [String(body.imageUrl).trim()].filter(Boolean);
+    }
+    const primaryImage = postImageUrls[0] || String(body.imageUrl || "").trim();
+
     const post = await prisma.roadshowPost.create({
       data: {
         title,
@@ -658,7 +710,8 @@ export async function POST(req: NextRequest) {
         location: sanitizeString(String(body.location || "Kab. Probolinggo")),
         date: sanitizeString(String(body.date || "")),
         time: postTime,
-        imageUrl: String(body.imageUrl || "").trim(),
+        imageUrl: primaryImage,
+        imageUrls: JSON.stringify(postImageUrls),
         summary: sanitizeString(String(body.summary || ""), 1500),
         content: sanitizeString(String(body.content || ""), 8000),
         isPublished: body.isPublished !== false,
@@ -1087,6 +1140,14 @@ export async function PUT(req: NextRequest) {
     const postStatus = validStatuses.includes(body.status) ? body.status : "SUDAH_DIKUNJUNGI";
     const postTime = sanitizeString(String(body.time || "08:00 - 12:00 WIB")).trim();
 
+    let postImageUrls: string[] = [];
+    if (Array.isArray(body.imageUrls)) {
+      postImageUrls = body.imageUrls.map((u: any) => String(u || "").trim()).filter(Boolean).slice(0, 5);
+    } else if (body.imageUrl) {
+      postImageUrls = [String(body.imageUrl).trim()].filter(Boolean);
+    }
+    const primaryImage = postImageUrls[0] || String(body.imageUrl || "").trim();
+
     const post = await prisma.roadshowPost.update({
       where: { id },
       data: {
@@ -1098,7 +1159,8 @@ export async function PUT(req: NextRequest) {
         location: sanitizeString(String(body.location || "Kab. Probolinggo")),
         date: sanitizeString(String(body.date || "")),
         time: postTime,
-        imageUrl: String(body.imageUrl || "").trim(),
+        imageUrl: primaryImage,
+        imageUrls: JSON.stringify(postImageUrls),
         summary: sanitizeString(String(body.summary || ""), 1500),
         content: sanitizeString(String(body.content || ""), 8000),
         isPublished: body.isPublished !== false,
