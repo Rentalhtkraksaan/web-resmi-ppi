@@ -93,6 +93,8 @@ export default function PpiRoadshow27Page() {
   const [isAdminRoadshow, setIsAdminRoadshow] = useState(false);
   const [qrVerified, setQrVerified] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  // Filter Gender: ALL | Cowok | Cewek (berlaku untuk Regis, BB, dan TB)
+  const [candidateGenderFilter, setCandidateGenderFilter] = useState<"ALL" | "Cowok" | "Cewek">("ALL");
 
   // Active Filter Tab: TABEL_BB (Tabel BB) | TABEL_TB (Tabel TB) | REGISTRASI | ADMIN_PANEL | POSTS_PANEL
   const [activeTab, setActiveTab] = useState<"TABEL_BB" | "TABEL_TB" | "REGISTRASI" | "ADMIN_PANEL" | "POSTS_PANEL">("TABEL_BB");
@@ -867,9 +869,30 @@ export default function PpiRoadshow27Page() {
 
   const activeSchool = schools.find((s) => s.id === activeSchoolId);
   const isManager = isAdminRoadshow || user?.role === "SUPER_ADMIN" || user?.role === "ADMIN";
+
+  // Perhitungan statistik sekolah aktif (Jumlah terdaftar, jumlah lulus, & kelengkapan data)
+  const totalTerdaftar = candidates.length;
+  const countCowok = candidates.filter((c) => c.jenisKelamin === "Cowok").length;
+  const countCewek = candidates.filter((c) => c.jenisKelamin === "Cewek").length;
+
+  const totalLulus = candidates.filter((c) => c.hasilLulus).length;
+  const countCowokLulus = candidates.filter((c) => c.hasilLulus && c.jenisKelamin === "Cowok").length;
+  const countCewekLulus = candidates.filter((c) => c.hasilLulus && c.jenisKelamin === "Cewek").length;
+
+  const totalDataLengkap = candidates.filter(
+    (c) => (c.beratBadan && c.beratBadan > 0) && (c.tinggiBadan && c.tinggiBadan > 0)
+  ).length;
+  const totalBelumLengkap = totalTerdaftar - totalDataLengkap;
+
+  // Filter gabungan Nama/Kode + Filter Gender Cewek/Cowok (aktif di Regis, BB, dan TB)
   const filteredCandidates = candidates.filter((c) => {
     const q = searchQuery.toLowerCase().trim();
-    return !q || c.nama.toLowerCase().includes(q) || c.kodePeserta.toLowerCase().includes(q);
+    const matchSearch = !q || c.nama.toLowerCase().includes(q) || c.kodePeserta.toLowerCase().includes(q);
+    const matchGender =
+      candidateGenderFilter === "ALL" ||
+      (candidateGenderFilter === "Cowok" && c.jenisKelamin === "Cowok") ||
+      (candidateGenderFilter === "Cewek" && c.jenisKelamin === "Cewek");
+    return matchSearch && matchGender;
   });
 
   if (authLoading) {
@@ -1217,7 +1240,7 @@ export default function PpiRoadshow27Page() {
           </div>
         ) : (
           /* BANNER SEKOLAH AKTIF UNTUK PANITIA YANG SUDAH SCAN QR */
-          <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1229,100 +1252,248 @@ export default function PpiRoadshow27Page() {
                 {activeSchool?.namaSekolah}
               </h2>
             </div>
-            <span className="text-[11px] text-zinc-400">
-              Total Peserta: <strong className="text-white">{candidates.length}</strong>
-            </span>
+            <div className="flex items-center gap-4 text-xs">
+              <div className="text-left">
+                <span className="text-[10px] text-zinc-400 block uppercase font-semibold">Siswa Terdaftar</span>
+                <strong className="text-white text-sm font-mono">{totalTerdaftar} Siswa</strong>
+                <span className="text-[10px] text-zinc-400 block">({countCowok} Putra • {countCewek} Putri)</span>
+              </div>
+              <div className="h-7 w-px bg-zinc-800" />
+              <div className="text-left">
+                <span className="text-[10px] text-emerald-400 block uppercase font-semibold">Siswa Lulus</span>
+                <strong className="text-emerald-400 text-sm font-mono">{totalLulus} Siswa</strong>
+                <span className="text-[10px] text-emerald-300 block">({countCowokLulus} Putra • {countCewekLulus} Putri)</span>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* NAVIGATION & SEARCH BAR (RESPONSIVE) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveTab("TABEL_BB")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "TABEL_BB"
-                  ? "bg-sky-500 text-black border-sky-500"
-                  : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-                }`}
-            >
-              Tabel BB
-            </button>
+        {/* STATISTIK LENGKAP SEKOLAH AKTIF: JUMLAH TERDAFTAR, JUMLAH LULUS, & STATUS PENGISIAN */}
+        {activeSchool && (
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
+              <div>
+                <span className="text-[10px] font-black text-red-500 uppercase tracking-widest block">
+                  Data Statistik Sekolah
+                </span>
+                <h3 className="text-sm sm:text-base font-bold text-white">
+                  {activeSchool.namaSekolah}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">Status Sesi:</span>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    activeSchool.statusPenilaian === "Hari Ini"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      : activeSchool.statusPenilaian === "Ditutup"
+                      ? "bg-zinc-800 text-zinc-400"
+                      : "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                  }`}
+                >
+                  {activeSchool.statusPenilaian || "Belum Dimulai"}
+                </span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveTab("TABEL_TB")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "TABEL_TB"
-                  ? "bg-amber-500 text-black border-amber-500"
-                  : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-                }`}
-            >
-              Tabel TB
-            </button>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
+              {/* Stat 1: Siswa Terdaftar */}
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                  Jumlah Siswa Terdaftar
+                </span>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-white font-mono">{totalTerdaftar}</span>
+                  <span className="text-xs text-zinc-400">Siswa</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1.5 font-medium">
+                  <span className="text-sky-400">{countCowok} Cowok</span>
+                  <span>•</span>
+                  <span className="text-pink-400">{countCewek} Cewek</span>
+                </div>
+              </div>
 
-            <button
-              onClick={() => setActiveTab("REGISTRASI")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition inline-flex items-center gap-1.5 ${activeTab === "REGISTRASI"
-                  ? "bg-white text-black border-white"
-                  : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
-                }`}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Registrasi Peserta</span>
-            </button>
+              {/* Stat 2: Siswa Lulus Seleksi */}
+              <div className="bg-zinc-950/80 border border-emerald-500/30 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                  Jumlah Siswa Lulus
+                </span>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-emerald-400 font-mono">{totalLulus}</span>
+                  <span className="text-xs text-emerald-300 font-semibold">Lulus</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1.5 font-medium">
+                  <span className="text-sky-400">{countCowokLulus} Cowok</span>
+                  <span>•</span>
+                  <span className="text-pink-400">{countCewekLulus} Cewek</span>
+                </div>
+              </div>
 
-            {isAdminRoadshow && (
+              {/* Stat 3: Data Sudah Diisi */}
+              <div className="bg-zinc-950/80 border border-sky-500/30 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
+                  Data Sudah Diisi
+                </span>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-sky-300 font-mono">{totalDataLengkap}</span>
+                  <span className="text-xs text-sky-200">Lengkap</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 mt-1">
+                  BB &amp; TB terisi lengkap
+                </div>
+              </div>
+
+              {/* Stat 4: Belum Lengkap */}
+              <div className="bg-zinc-950/80 border border-amber-500/30 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                  Belum Lengkap
+                </span>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-amber-400 font-mono">{totalBelumLengkap}</span>
+                  <span className="text-xs text-amber-200">Antrean</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 mt-1">
+                  Menunggu input BB/TB
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NAVIGATION, SEARCH BAR & GENDER FILTER TOOLBAR */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => setActiveTab("ADMIN_PANEL")}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "ADMIN_PANEL"
-                    ? "bg-red-600 text-white border-red-600"
+                onClick={() => setActiveTab("TABEL_BB")}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "TABEL_BB"
+                    ? "bg-sky-500 text-black border-sky-500"
                     : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
                   }`}
               >
-                Panel Kelulusan &amp; Tayang
+                Tabel BB
               </button>
-            )}
 
-            {isAdminRoadshow && (
               <button
-                onClick={() => {
-                  setActiveTab("POSTS_PANEL");
-                  loadPosts();
-                }}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${activeTab === "POSTS_PANEL"
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/30"
+                onClick={() => setActiveTab("TABEL_TB")}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "TABEL_TB"
+                    ? "bg-amber-500 text-black border-amber-500"
                     : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
                   }`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Kelola Berita Roadshow ({posts.length})</span>
+                Tabel TB
               </button>
-            )}
+
+              <button
+                onClick={() => setActiveTab("REGISTRASI")}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition inline-flex items-center gap-1.5 ${activeTab === "REGISTRASI"
+                    ? "bg-white text-black border-white"
+                    : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                  }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Registrasi Peserta</span>
+              </button>
+
+              {isAdminRoadshow && (
+                <button
+                  onClick={() => setActiveTab("ADMIN_PANEL")}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${activeTab === "ADMIN_PANEL"
+                      ? "bg-red-600 text-white border-red-600"
+                      : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                    }`}
+                >
+                  Panel Kelulusan &amp; Tayang
+                </button>
+              )}
+
+              {isAdminRoadshow && (
+                <button
+                  onClick={() => {
+                    setActiveTab("POSTS_PANEL");
+                    loadPosts();
+                  }}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${activeTab === "POSTS_PANEL"
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/30"
+                      : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                    }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Kelola Berita Roadshow ({posts.length})</span>
+                </button>
+              )}
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <input
+                type="text"
+                maxLength={100}
+                value={searchQuery.slice(0, 100)}
+                onChange={(e) => setSearchQuery(e.target.value.slice(0, 100))}
+                placeholder="Cari nama atau kode peserta..."
+                className="w-full pl-3.5 pr-14 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:border-red-500 focus:outline-none"
+              />
+              {searchQuery.length > 0 && (
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-mono">
+                  {searchQuery.length}/100
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="relative w-full sm:w-64">
-            <input
-              type="text"
-              maxLength={100}
-              value={searchQuery.slice(0, 100)}
-              onChange={(e) => setSearchQuery(e.target.value.slice(0, 100))}
-              onPaste={(e) => {
-                const pasted = e.clipboardData.getData("text") || "";
-                if ((searchQuery.length + pasted.length) > 100) {
-                  e.preventDefault();
-                  const remaining = 100 - searchQuery.length;
-                  if (remaining > 0) {
-                    setSearchQuery((prev) => (prev + pasted.slice(0, remaining)).slice(0, 100));
-                  }
-                }
-              }}
-              placeholder="Cari nama atau kode peserta (maks. 100)..."
-              className="w-full pl-3.5 pr-14 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:border-red-500 focus:outline-none"
-            />
-            {searchQuery.length > 0 && (
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-mono">
-                {searchQuery.length}/100
-              </span>
-            )}
-          </div>
+          {/* FILTER GENDER CEWEK / COWOK (BERLAKU UNTUK REGIS, BB, TB, & PANEL KELULUSAN) */}
+          {activeTab !== "POSTS_PANEL" && (
+            <div className="flex flex-wrap items-center justify-between gap-2.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-3.5 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mr-1">
+                  Filter Gender:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCandidateGenderFilter("ALL")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                    candidateGenderFilter === "ALL"
+                      ? "bg-red-600 text-white shadow-sm"
+                      : "bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800"
+                  }`}
+                >
+                  Semua ({candidates.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCandidateGenderFilter("Cowok")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    candidateGenderFilter === "Cowok"
+                      ? "bg-sky-600 text-white shadow-sm font-black"
+                      : "bg-zinc-950 text-sky-400 hover:text-white border border-zinc-800"
+                  }`}
+                >
+                  <span>Cowok / Putra</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/30">
+                    {countCowok}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCandidateGenderFilter("Cewek")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    candidateGenderFilter === "Cewek"
+                      ? "bg-pink-600 text-white shadow-sm font-black"
+                      : "bg-zinc-950 text-pink-400 hover:text-white border border-zinc-800"
+                  }`}
+                >
+                  <span>Cewek / Putri</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/30">
+                    {countCewek}
+                  </span>
+                </button>
+              </div>
+
+              <div className="text-xs text-zinc-400 font-medium">
+                Menampilkan: <strong className="text-white">{filteredCandidates.length}</strong> peserta
+              </div>
+            </div>
+          )}
         </div>
 
         {/* =================================================================== */}
@@ -1334,26 +1505,34 @@ export default function PpiRoadshow27Page() {
             const field = isBB ? "beratBadan" : "tinggiBadan";
             const unit = isBB ? "kg" : "cm";
             const accent = isBB ? "text-sky-400 bg-sky-500/15" : "text-amber-400 bg-amber-500/15";
+            const countFilled = filteredCandidates.filter((c) => c[field] && c[field] > 0).length;
             return (
               <div
                 className={`bg-zinc-900 border rounded-2xl p-4 sm:p-5 space-y-4 ${
                   isBB ? "border-sky-500/30" : "border-amber-500/30"
                 }`}
               >
-                <div className="border-b border-zinc-800 pb-3">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isBB ? "text-sky-400" : "text-amber-400"
-                    }`}
-                  >
-                    {isBB ? "Tabel 1" : "Tabel 2"} • Sinkron Real-Time
-                  </span>
-                  <h3 className="text-sm sm:text-base font-bold text-white">
-                    {isBB ? "Input Berat Badan (BB)" : "Input Tinggi Badan (TB)"} — {activeSchool?.namaSekolah}
-                  </h3>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Ketik angka {isBB ? "BB (kg)" : "TB (cm)"} lalu tekan Tab / klik di luar kolom untuk menyimpan otomatis. Salah ketik nama? Klik tombol Edit.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                  <div>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isBB ? "text-sky-400" : "text-amber-400"
+                      }`}
+                    >
+                      {isBB ? "Tabel 1: Pos Pengukuran BB" : "Tabel 2: Pos Pengukuran TB"} • Real-Time
+                    </span>
+                    <h3 className="text-sm sm:text-base font-bold text-white">
+                      {isBB ? "Input Berat Badan (BB)" : "Input Tinggi Badan (TB)"} — {activeSchool?.namaSekolah}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Ketik angka {isBB ? "BB (kg)" : "TB (cm)"} lalu tekan Tab / klik di luar kolom untuk menyimpan otomatis.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-300">
+                      Terisi: <strong className="text-emerald-400">{countFilled}</strong> / {filteredCandidates.length} Siswa
+                    </span>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
@@ -1364,65 +1543,88 @@ export default function PpiRoadshow27Page() {
                         <th className="p-3">Kode</th>
                         <th className="p-3">Nama Peserta</th>
                         <th className="p-3">JK</th>
-                        <th className="p-3">{isBB ? "Berat Badan" : "Tinggi Badan"}</th>
+                        <th className="p-3">{isBB ? "Input Berat Badan" : "Input Tinggi Badan"}</th>
+                        <th className="p-3">Status Pengisian</th>
                         <th className="p-3 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800">
                       {filteredCandidates.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="p-8 text-center text-zinc-500">
-                            Belum ada peserta di sekolah ini.
+                          <td colSpan={7} className="p-8 text-center text-zinc-500">
+                            Tidak ada peserta yang cocok dengan filter.
                           </td>
                         </tr>
                       ) : (
-                        filteredCandidates.map((c, idx) => (
-                          <tr key={`${field}_row_${c.id}`} className="hover:bg-zinc-950/60">
-                            <td className="p-3 text-zinc-500">{idx + 1}</td>
-                            <td className="p-3">
-                              <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${accent}`}>
-                                {c.kodePeserta}
-                              </span>
-                            </td>
-                            <td className="p-3 font-semibold text-white break-words">{c.nama}</td>
-                            <td className="p-3 text-zinc-400">{c.jenisKelamin}</td>
-                            <td className="p-3">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={`inline-flex items-center bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 ${
-                                    isBB ? "focus-within:border-sky-400" : "focus-within:border-amber-400"
-                                  }`}
-                                >
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0"
-                                    key={`${field}_${c.id}_${c[field]}`}
-                                    defaultValue={c[field] || ""}
-                                    placeholder="0"
-                                    onBlur={(e) => handleSaveBbTb(c.id, field, e.target.value)}
-                                    className="w-16 bg-transparent text-white text-center font-bold text-sm focus:outline-none"
-                                  />
-                                  <span className="text-[11px] font-semibold text-zinc-400 pl-1">{unit}</span>
+                        filteredCandidates.map((c, idx) => {
+                          const isFilled = c[field] && c[field] > 0;
+                          return (
+                            <tr key={`${field}_row_${c.id}`} className="hover:bg-zinc-950/60">
+                              <td className="p-3 text-zinc-500">{idx + 1}</td>
+                              <td className="p-3">
+                                <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${accent}`}>
+                                  {c.kodePeserta}
+                                </span>
+                              </td>
+                              <td className="p-3 font-semibold text-white break-words">{c.nama}</td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  c.jenisKelamin === "Cowok"
+                                    ? "bg-sky-500/15 text-sky-300"
+                                    : "bg-pink-500/15 text-pink-300"
+                                }`}>
+                                  {c.jenisKelamin}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={`inline-flex items-center bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 ${
+                                      isBB ? "focus-within:border-sky-400" : "focus-within:border-amber-400"
+                                    }`}
+                                  >
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      key={`${field}_${c.id}_${c[field]}`}
+                                      defaultValue={c[field] || ""}
+                                      placeholder="0"
+                                      onBlur={(e) => handleSaveBbTb(c.id, field, e.target.value)}
+                                      className="w-16 bg-transparent text-white text-center font-bold text-sm focus:outline-none"
+                                    />
+                                    <span className="text-[11px] font-semibold text-zinc-400 pl-1">{unit}</span>
+                                  </div>
+                                  {saveIndicators[`${c.id}_${field}`] && (
+                                    <span className="text-[10px] text-emerald-400 font-semibold">
+                                      {saveIndicators[`${c.id}_${field}`]}
+                                    </span>
+                                  )}
                                 </div>
-                                {saveIndicators[`${c.id}_${field}`] && (
-                                  <span className="text-[10px] text-emerald-400 font-semibold">
-                                    {saveIndicators[`${c.id}_${field}`]}
+                              </td>
+                              <td className="p-3">
+                                {isFilled ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    <Check className="w-3 h-3 text-emerald-400" /> Data Sudah Diisi
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                    Belum Diisi
                                   </span>
                                 )}
-                              </div>
-                            </td>
-                            <td className="p-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => openEditCandidateModal(c)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition"
-                              >
-                                <Edit className="w-3.5 h-3.5" /> Edit
-                              </button>
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+                              <td className="p-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditCandidateModal(c)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition"
+                                >
+                                  <Edit className="w-3.5 h-3.5" /> Edit
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -1478,57 +1680,138 @@ export default function PpiRoadshow27Page() {
               </form>
 
               {lastCreatedCode && (
-                <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-center">
-                  <span className="text-xs text-emerald-300 block">Kode Peserta:</span>
-                  <strong className="text-2xl font-mono font-bold text-white">{lastCreatedCode}</strong>
+                <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-center space-y-1">
+                  <span className="text-xs text-emerald-300 font-bold block">
+                    Registrasi Berhasil! Kode Peserta:
+                  </span>
+                  <strong className="text-2xl font-mono font-bold text-white block">
+                    {lastCreatedCode}
+                  </strong>
+                  <span className="text-[11px] text-emerald-200/90 block">
+                    Data peserta terdaftar. Segera arahkan peserta ke pos pengukuran Berat Badan (BB) dan Tinggi Badan (TB).
+                  </span>
                 </div>
               )}
             </div>
 
-            <div className="lg:col-span-7 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-              <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider mb-3">
-                Daftar Peserta Terdaftar ({filteredCandidates.length})
-              </h3>
-              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+            <div className="lg:col-span-7 bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                    Daftar Peserta Terdaftar ({filteredCandidates.length})
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Memantau status kelengkapan data hasil pengukuran BB dan TB setiap peserta.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                  <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {filteredCandidates.filter(c => c.beratBadan > 0 && c.tinggiBadan > 0).length} Data Lengkap
+                  </span>
+                  <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    {filteredCandidates.filter(c => !c.beratBadan || !c.tinggiBadan).length} Antrean
+                  </span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-950 text-zinc-400 uppercase sticky top-0">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase sticky top-0 z-10">
                     <tr>
                       <th className="p-3">No</th>
                       <th className="p-3">Kode</th>
                       <th className="p-3">Nama Peserta</th>
                       <th className="p-3">JK</th>
+                      <th className="p-3">Status Pengisian Data</th>
                       <th className="p-3 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800">
-                    {filteredCandidates.map((c, i) => (
-                      <tr key={c.id}>
-                        <td className="p-3 text-zinc-500">{i + 1}</td>
-                        <td className="p-3 font-mono font-bold text-sky-400">{c.kodePeserta}</td>
-                        <td className="p-3 font-semibold text-white">{c.nama}</td>
-                        <td className="p-3 text-zinc-400">{c.jenisKelamin}</td>
-                        <td className="p-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => openEditCandidateModal(c)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold"
-                            >
-                              <Edit className="w-3.5 h-3.5" /> Edit
-                            </button>
-                            {isAdminRoadshow && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCandidate(c.id, c.nama)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 font-semibold"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Hapus
-                              </button>
-                            )}
-                          </div>
+                    {filteredCandidates.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-zinc-500">
+                          Tidak ada peserta yang cocok dengan filter atau belum ada peserta terdaftar.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredCandidates.map((c, i) => {
+                        const hasBB = c.beratBadan && c.beratBadan > 0;
+                        const hasTB = c.tinggiBadan && c.tinggiBadan > 0;
+                        const isComplete = hasBB && hasTB;
+                        return (
+                          <tr key={c.id} className="hover:bg-zinc-950/60">
+                            <td className="p-3 text-zinc-500">{i + 1}</td>
+                            <td className="p-3 font-mono font-bold text-sky-400">{c.kodePeserta}</td>
+                            <td className="p-3 font-semibold text-white break-words">{c.nama}</td>
+                            <td className="p-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  c.jenisKelamin === "Cowok"
+                                    ? "bg-sky-500/15 text-sky-300"
+                                    : "bg-pink-500/15 text-pink-300"
+                                }`}
+                              >
+                                {c.jenisKelamin}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {isComplete ? (
+                                <div className="inline-flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    <Check className="w-3 h-3 text-emerald-400" /> Data Sudah Diisi
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 font-mono pl-1">
+                                    BB: {c.beratBadan} kg • TB: {c.tinggiBadan} cm
+                                  </span>
+                                </div>
+                              ) : hasBB ? (
+                                <div className="inline-flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                                    BB Terisi ({c.beratBadan} kg)
+                                  </span>
+                                  <span className="text-[10px] text-amber-400/90 pl-1">
+                                    TB Belum Diisi
+                                  </span>
+                                </div>
+                              ) : hasTB ? (
+                                <div className="inline-flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    TB Terisi ({c.tinggiBadan} cm)
+                                  </span>
+                                  <span className="text-[10px] text-sky-400/90 pl-1">
+                                    BB Belum Diisi
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
+                                  Belum Diisi (Menunggu BB &amp; TB)
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditCandidateModal(c)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold"
+                                >
+                                  <Edit className="w-3.5 h-3.5" /> Edit
+                                </button>
+                                {isAdminRoadshow && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCandidate(c.id, c.nama)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 font-semibold"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Hapus
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>

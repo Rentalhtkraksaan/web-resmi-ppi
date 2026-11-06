@@ -130,13 +130,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const ogImages = post.imageUrl
     ? [
-        {
-          url: post.imageUrl,
-          width: 1200,
-          height: 630,
-          alt: post.title,
-        },
-      ]
+      {
+        url: post.imageUrl,
+        width: 1200,
+        height: 630,
+        alt: post.title,
+      },
+    ]
     : [];
 
   return {
@@ -229,13 +229,12 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <span
-              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
-                isSedang
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isSedang
                   ? "bg-red-600 text-white shadow-md shadow-red-900/40 ring-2 ring-red-400/50"
                   : isSudah
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40"
-                  : "bg-sky-600 text-white shadow-md shadow-sky-900/40"
-              }`}
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40"
+                    : "bg-sky-600 text-white shadow-md shadow-sky-900/40"
+                }`}
             >
               {isSedang ? (
                 <>
@@ -371,11 +370,10 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
                       </div>
 
                       <span
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black shrink-0 ${
-                          isCewek
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black shrink-0 ${isCewek
                             ? "bg-pink-100 text-pink-700 border border-pink-200"
                             : "bg-blue-100 text-blue-700 border border-blue-200"
-                        }`}
+                          }`}
                       >
                         {c.jenisKelamin}
                       </span>
