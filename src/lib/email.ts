@@ -2,39 +2,38 @@ import nodemailer from "nodemailer";
 
 /**
  * Mailer service resmi PPI Kabupaten Probolinggo
- * Menggunakan SMTP Gmail atau SMTP hosting lainnya.
+ * Menggunakan SMTP Gmail SSL Port 465 terverifikasi
  */
 function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const user = process.env.SMTP_USER || "paskibrakakabprobolinggo@gmail.com";
+  const pass = process.env.SMTP_PASS || "avrgcuguzftqcwgj";
 
-  if (!user || !pass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    service: "gmail",
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
     auth: {
       user,
       pass,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
+
+  return { transporter, user };
 }
 
 /**
  * Mengirim email notifikasi registrasi berhasil
  */
 export async function sendWelcomeEmail(toEmail: string, fullName: string, username: string) {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.warn("SMTP_USER atau SMTP_PASS belum diset di .env. Simulasi kirim welcome email ke:", toEmail);
-    return false;
-  }
+  const { transporter, user } = getTransporter();
 
   const loginUrl = "https://www.ppikabupatenprobolinggo.id/login";
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px; background: #ffffff;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
       <div style="text-align: center; margin-bottom: 24px;">
         <h2 style="color: #990000; margin: 0;">Purna Paskibraka Indonesia</h2>
         <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Kabupaten Probolinggo</p>
@@ -66,7 +65,7 @@ export async function sendWelcomeEmail(toEmail: string, fullName: string, userna
 
   try {
     await transporter.sendMail({
-      from: `"PPI Kab. Probolinggo" <${process.env.SMTP_USER}>`,
+      from: `"PPI Kab. Probolinggo" <${user}>`,
       to: toEmail,
       subject: "Pendaftaran Akun Berhasil - PPI Kabupaten Probolinggo",
       html,
@@ -82,11 +81,7 @@ export async function sendWelcomeEmail(toEmail: string, fullName: string, userna
  * Mengirim kode OTP Lupa Password
  */
 export async function sendOtpEmail(toEmail: string, fullName: string, otpCode: string) {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.warn("SMTP_USER atau SMTP_PASS belum diset di .env. Simulasi OTP:", otpCode, "ke:", toEmail);
-    return false;
-  }
+  const { transporter, user } = getTransporter();
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
@@ -117,7 +112,7 @@ export async function sendOtpEmail(toEmail: string, fullName: string, otpCode: s
 
   try {
     await transporter.sendMail({
-      from: `"PPI Kab. Probolinggo" <${process.env.SMTP_USER}>`,
+      from: `"PPI Kab. Probolinggo" <${user}>`,
       to: toEmail,
       subject: `[${otpCode}] Kode OTP Reset Password Akun PPI`,
       html,
