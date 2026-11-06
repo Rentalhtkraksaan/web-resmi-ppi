@@ -193,8 +193,7 @@ export default function PublicRoadshowPage() {
     const text =
       `*ALHAMDULILLAH LOLOS SELEKSI ROADSHOW PPI KABUPATEN PROBOLINGGO*\n\n` +
       `Saya atas nama: *${c.nama.toUpperCase()}*\n` +
-      `Asal Sekolah: *${schoolName}*\n` +
-      `Kode Peserta: *${c.kodePeserta}*\n\n` +
+      `Asal Sekolah: *${schoolName}*\n\n` +
       `Dinyatakan *LOLOS SELEKSI TAHAP AWAL ROADSHOW PPI* dan berhak melangkah ke seleksi Calon Paskibraka Kabupaten Probolinggo!\n\n` +
       `Cek hasil verifikasi resmi di:\n` +
       `https://ppikabupatenprobolinggo.id/roadshow\n\n` +
@@ -805,10 +804,11 @@ export default function PublicRoadshowPage() {
                           {c.jenisKelamin}
                         </span>
                       </div>
-                      <div className="text-xs text-zinc-400 mt-1">
-                        Kode: <strong className="text-sky-400 font-mono">{c.kodePeserta}</strong> •{" "}
-                        <span className="text-zinc-300">{c.namaSekolah}</span>
-                      </div>
+                      {c.namaSekolah && (
+                        <div className="text-xs text-zinc-400 mt-1">
+                          <span className="text-zinc-300">{c.namaSekolah}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 self-start sm:self-center shrink-0">

@@ -177,3 +177,4 @@ export function resolveAutoPostStatus(post: {
   // Not yet started
   return "AKAN_DIKUNJUNGI";
 }
+

@@ -397,16 +397,10 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
                       key={c.id}
                       className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 hover:border-emerald-500 transition shadow-sm"
                     >
-                      <div className="space-y-0.5 min-w-0">
-                        <span className="block text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">
-                          Kode: {c.kodePeserta}
-                        </span>
-                        <h4 className="text-sm font-extrabold text-slate-900 truncate">
+                      <div className="min-w-0 pr-2">
+                        <h4 className="text-sm font-bold text-slate-900 leading-snug">
                           {c.nama}
                         </h4>
-                        <div className="text-[11px] text-slate-500 font-medium">
-                          BB: {c.beratBadan} kg • TB: {c.tinggiBadan} cm
-                        </div>
                       </div>
 
                       <span
