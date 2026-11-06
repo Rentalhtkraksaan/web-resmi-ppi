@@ -6,6 +6,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import PaskibrakaAuthSplit from "@/components/PaskibrakaAuthSplit";
+import { toRoadshowSlug } from "@/lib/slug";
 import { showConfirm, showError, showSuccess, showWarning } from "@/lib/swal";
 import {
   ArrowLeft,
@@ -1768,15 +1769,34 @@ export default function PpiRoadshow27Page() {
                           </div>
                         </div>
 
-                        <div className="p-3 bg-zinc-900/60 border-t border-zinc-800/80 flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleTogglePostStatus(post)}
-                            className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold"
-                            title="Ubah antara Sudah Dikunjungi dan Akan Dikunjungi"
-                          >
-                            Ganti Status
-                          </button>
+                        <div className="p-3 bg-zinc-900/60 border-t border-zinc-800/80 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePostStatus(post)}
+                              className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold"
+                              title="Ubah antara Sudah Dikunjungi dan Akan Dikunjungi"
+                            >
+                              Ganti Status
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const slug = toRoadshowSlug(post.schoolName, post.location) || post.id;
+                                const url = `https://www.ppikabupatenprobolinggo.id/roadshow/${slug}`;
+                                try {
+                                  await navigator.clipboard.writeText(url);
+                                  showSuccess("Link Berita Disalin!", url);
+                                } catch {
+                                  showSuccess("Link Berita", url);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/30 text-xs font-semibold"
+                              title="Salin link berita format publik"
+                            >
+                              Salin Link
+                            </button>
+                          </div>
 
                           <div className="flex items-center gap-1.5">
                             <button

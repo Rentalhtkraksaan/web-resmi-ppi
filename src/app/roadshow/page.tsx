@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLive } from "@/lib/useLive";
 import Link from "next/link";
+import { toRoadshowSlug } from "@/lib/slug";
+import RoadshowShareWidget from "@/components/RoadshowShareWidget";
 
 interface PassedCandidate {
   id: string;
@@ -56,6 +58,28 @@ export default function PublicRoadshowPage() {
   const [postFilter, setPostFilter] = useState<"ALL" | "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI">("ALL");
   const [searchPostQuery, setSearchPostQuery] = useState("");
   const [selectedPost, setSelectedPost] = useState<RoadshowPost | null>(null);
+  const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
+
+  const handleCopyPostLink = async (e: React.MouseEvent, post: RoadshowPost) => {
+    e.stopPropagation();
+    const slug = toRoadshowSlug(post.schoolName, post.location) || post.id;
+    const shareUrl = `https://www.ppikabupatenprobolinggo.id/roadshow/${slug}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedPostId(post.id);
+      setTimeout(() => setCopiedPostId(null), 2500);
+    } catch {
+      // Fallback
+      const input = document.createElement("input");
+      input.value = shareUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopiedPostId(post.id);
+      setTimeout(() => setCopiedPostId(null), 2500);
+    }
+  };
 
   // Candidate Filter State
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>("ALL");
@@ -482,12 +506,22 @@ export default function PublicRoadshowPage() {
                     </div>
 
                     {/* Card Footer */}
-                    <div className="px-5 pb-5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-500 truncate max-w-[170px]">
-                        🏫 {post.schoolName || "Sekolah Mitra"}
-                      </span>
+                    <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyPostLink(e, post)}
+                        title="Salin link berita ini"
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 active:scale-95 ${
+                          copiedPostId === post.id
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                        }`}
+                      >
+                        <span>{copiedPostId === post.id ? "Link Disalin!" : "Bagikan Link"}</span>
+                      </button>
+
                       <span className="text-red-600 font-bold group-hover:underline flex items-center gap-1">
-                        {isSudah ? "Baca Selengkapnya →" : "Lihat Info Agenda →"}
+                        {isSudah ? "Baca Selengkapnya" : "Lihat Info Agenda"}
                       </span>
                     </div>
                   </article>
@@ -844,6 +878,29 @@ export default function PublicRoadshowPage() {
                 {selectedPost.content}
               </div>
 
+              {/* Bagikan Berita Widget (Friendly Slug URL) */}
+              {(() => {
+                const modalSlug = toRoadshowSlug(selectedPost.schoolName, selectedPost.location) || selectedPost.id;
+                const modalShareUrl = `https://www.ppikabupatenprobolinggo.id/roadshow/${modalSlug}`;
+                return (
+                  <div className="pt-2">
+                    <RoadshowShareWidget
+                      title={selectedPost.title}
+                      url={modalShareUrl}
+                      schoolName={selectedPost.schoolName}
+                    />
+                    <div className="flex justify-end pt-2">
+                      <Link
+                        href={`/roadshow/${modalSlug}`}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>Buka Halaman Lengkap</span>
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Action Button: Jika Sekolah Ini Sudah Selesai & Ada Siswa Lolos */}
               {selectedPost.status === "SUDAH_DIKUNJUNGI" && (
                 <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -864,7 +921,7 @@ export default function PublicRoadshowPage() {
                     }}
                     className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md shadow-red-600/30 transition flex items-center gap-2 shrink-0"
                   >
-                    <span>🏆 Lihat Siswa Lolos Sekolah Ini →</span>
+                    <span>🏆 Lihat Siswa Lolos Sekolah Ini</span>
                   </button>
                 </div>
               )}
