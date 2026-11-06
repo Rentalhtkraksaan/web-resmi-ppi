@@ -462,7 +462,7 @@ export default function PpiRoadshow27Page() {
 
       if (!streamAcquired) {
         setCameraError(
-          "Kamera belum diizinkan atau sedang digunakan oleh aplikasi lain. Klik 'Buka Kamera' atau izinkan akses kamera pada browser."
+          "Izin kamera belum aktif. Jika muncul notifikasi 'Tutup balon atau overlay', silakan tutup balon chat WhatsApp/Messenger/perekam layar yang mengambang di layar HP Anda, lalu tekan 'Nyalakan Kamera' lagi. Atau gunakan tombol 'Ambil Foto QR' di bawah."
         );
         return;
       }
@@ -498,7 +498,7 @@ export default function PpiRoadshow27Page() {
       }, 80);
     } catch {
       setCameraError(
-        "Kamera belum diizinkan atau tidak dapat diakses. Silakan izinkan akses kamera pada browser atau pilih foto QR di bawah."
+        "Kamera belum diizinkan atau tidak dapat diakses. Jika muncul 'Tutup balon atau overlay', tutup balon chat WhatsApp/aplikasi mengambang di layar HP Anda, lalu coba lagi. Atau gunakan tombol 'Ambil Foto QR' di bawah."
       );
     }
   };
@@ -970,6 +970,16 @@ export default function PpiRoadshow27Page() {
                 </p>
               </div>
             )}
+
+            {/* Panduan Cepat Balon / Overlay Android */}
+            <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-left space-y-1">
+              <span className="font-bold flex items-center gap-1.5 text-amber-200">
+                <span>💡 Catatan HP Android:</span>
+              </span>
+              <p className="text-zinc-300 leading-relaxed">
+                Jika muncul pesan <em>&ldquo;Tutup balon atau overlay&rdquo;</em>, tutup dulu balon chat WhatsApp/Messenger atau perekam layar yang sedang mengambang di layar HP Anda, lalu klik <strong>Coba lagi</strong>.
+              </p>
+            </div>
 
             {/* Kontrol kamera: nyalakan manual + ganti depan/belakang */}
             <div className="grid grid-cols-2 gap-2">
