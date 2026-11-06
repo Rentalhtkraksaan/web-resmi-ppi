@@ -644,7 +644,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Judul berita wajib diisi." }, { status: 400 });
     }
 
-    const postStatus = body.status === "AKAN_DIKUNJUNGI" ? "AKAN_DIKUNJUNGI" : "SUDAH_DIKUNJUNGI";
+    const validStatuses = ["AKAN_DIKUNJUNGI", "SEDANG_BERLANGSUNG", "SUDAH_DIKUNJUNGI"];
+    const postStatus = validStatuses.includes(body.status) ? body.status : "AKAN_DIKUNJUNGI";
+    const postTime = sanitizeString(String(body.time || "08:00 - 12:00 WIB")).trim();
 
     const post = await prisma.roadshowPost.create({
       data: {
@@ -655,7 +657,8 @@ export async function POST(req: NextRequest) {
         schoolName: sanitizeString(String(body.schoolName || "")),
         location: sanitizeString(String(body.location || "Kab. Probolinggo")),
         date: sanitizeString(String(body.date || "")),
-        imageUrl: postStatus === "AKAN_DIKUNJUNGI" ? "" : String(body.imageUrl || "").trim(),
+        time: postTime,
+        imageUrl: String(body.imageUrl || "").trim(),
         summary: sanitizeString(String(body.summary || ""), 1500),
         content: sanitizeString(String(body.content || ""), 8000),
         isPublished: body.isPublished !== false,
@@ -1080,7 +1083,9 @@ export async function PUT(req: NextRequest) {
     const id = String(body.id || "");
     if (!id) return NextResponse.json({ error: "ID berita wajib diisi." }, { status: 400 });
 
-    const postStatus = body.status === "AKAN_DIKUNJUNGI" ? "AKAN_DIKUNJUNGI" : "SUDAH_DIKUNJUNGI";
+    const validStatuses = ["AKAN_DIKUNJUNGI", "SEDANG_BERLANGSUNG", "SUDAH_DIKUNJUNGI"];
+    const postStatus = validStatuses.includes(body.status) ? body.status : "SUDAH_DIKUNJUNGI";
+    const postTime = sanitizeString(String(body.time || "08:00 - 12:00 WIB")).trim();
 
     const post = await prisma.roadshowPost.update({
       where: { id },
@@ -1092,7 +1097,8 @@ export async function PUT(req: NextRequest) {
         schoolName: sanitizeString(String(body.schoolName || "")),
         location: sanitizeString(String(body.location || "Kab. Probolinggo")),
         date: sanitizeString(String(body.date || "")),
-        imageUrl: postStatus === "AKAN_DIKUNJUNGI" ? "" : String(body.imageUrl || "").trim(),
+        time: postTime,
+        imageUrl: String(body.imageUrl || "").trim(),
         summary: sanitizeString(String(body.summary || ""), 1500),
         content: sanitizeString(String(body.content || ""), 8000),
         isPublished: body.isPublished !== false,

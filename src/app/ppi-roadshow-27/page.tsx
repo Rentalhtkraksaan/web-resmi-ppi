@@ -65,11 +65,12 @@ interface RoadshowPost {
   id: string;
   title: string;
   category: string;
-  status: "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI";
+  status: "SUDAH_DIKUNJUNGI" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI";
   schoolId?: string;
   schoolName: string;
   location: string;
   date: string;
+  time?: string;
   imageUrl: string;
   summary: string;
   content: string;
@@ -112,15 +113,16 @@ export default function PpiRoadshow27Page() {
 
   // Roadshow Posts (Berita & Agenda Kunjungan) State
   const [posts, setPosts] = useState<RoadshowPost[]>([]);
-  const [postsFilter, setPostsFilter] = useState<"ALL" | "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI">("ALL");
+  const [postsFilter, setPostsFilter] = useState<"ALL" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI" | "SUDAH_DIKUNJUNGI">("ALL");
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<RoadshowPost | null>(null);
   const [postFormTitle, setPostFormTitle] = useState("");
-  const [postFormStatus, setPostFormStatus] = useState<"SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI">("SUDAH_DIKUNJUNGI");
-  const [postFormCategory, setPostFormCategory] = useState("Kunjungan Selesai");
+  const [postFormStatus, setPostFormStatus] = useState<"SUDAH_DIKUNJUNGI" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI">("AKAN_DIKUNJUNGI");
+  const [postFormCategory, setPostFormCategory] = useState("Kunjungan Sekolah");
   const [postFormSchool, setPostFormSchool] = useState("");
   const [postFormLocation, setPostFormLocation] = useState("");
   const [postFormDate, setPostFormDate] = useState("");
+  const [postFormTime, setPostFormTime] = useState("08:00 - 12:00 WIB");
   const [postFormImage, setPostFormImage] = useState("");
   const [postFormSummary, setPostFormSummary] = useState("");
   const [postFormContent, setPostFormContent] = useState("");
@@ -227,13 +229,14 @@ export default function PpiRoadshow27Page() {
   const openCreatePostModal = () => {
     setEditingPost(null);
     setPostFormTitle("");
-    setPostFormStatus("SUDAH_DIKUNJUNGI");
-    setPostFormCategory("Kunjungan Selesai");
+    setPostFormStatus("AKAN_DIKUNJUNGI");
+    setPostFormCategory("Agenda Resmi");
     setPostFormSchool(activeSchool?.namaSekolah || "");
     setPostFormLocation(activeSchool?.lokasi || "Kabupaten Probolinggo");
     setPostFormDate(
       new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }).toUpperCase()
     );
+    setPostFormTime("08:00 - 12:00 WIB");
     setPostFormImage("");
     setPostFormSummary("");
     setPostFormContent("");
@@ -248,6 +251,7 @@ export default function PpiRoadshow27Page() {
     setPostFormSchool(p.schoolName);
     setPostFormLocation(p.location);
     setPostFormDate(p.date);
+    setPostFormTime(p.time || "08:00 - 12:00 WIB");
     setPostFormImage(p.imageUrl);
     setPostFormSummary(p.summary);
     setPostFormContent(p.content);
@@ -301,7 +305,8 @@ export default function PpiRoadshow27Page() {
           schoolName: postFormSchool.trim(),
           location: postFormLocation.trim(),
           date: postFormDate.trim(),
-          imageUrl: postFormStatus === "SUDAH_DIKUNJUNGI" ? postFormImage.trim() : "",
+          time: postFormTime.trim(),
+          imageUrl: postFormImage.trim(),
           summary: postFormSummary.trim(),
           content: postFormContent.trim(),
           isPublished: true,
@@ -326,8 +331,18 @@ export default function PpiRoadshow27Page() {
   };
 
   const handleTogglePostStatus = async (p: RoadshowPost) => {
-    const nextStatus = p.status === "SUDAH_DIKUNJUNGI" ? "AKAN_DIKUNJUNGI" : "SUDAH_DIKUNJUNGI";
-    const statusLabel = nextStatus === "SUDAH_DIKUNJUNGI" ? "Sudah Dikunjungi" : "Akan Dikunjungi";
+    let nextStatus: "AKAN_DIKUNJUNGI" | "SEDANG_BERLANGSUNG" | "SUDAH_DIKUNJUNGI" = "SEDANG_BERLANGSUNG";
+    if (p.status === "AKAN_DIKUNJUNGI") nextStatus = "SEDANG_BERLANGSUNG";
+    else if (p.status === "SEDANG_BERLANGSUNG") nextStatus = "SUDAH_DIKUNJUNGI";
+    else nextStatus = "AKAN_DIKUNJUNGI";
+
+    const statusLabel =
+      nextStatus === "SEDANG_BERLANGSUNG"
+        ? "Sedang Berlangsung"
+        : nextStatus === "SUDAH_DIKUNJUNGI"
+        ? "Sudah Dikunjungi"
+        : "Akan Dikunjungi";
+
     const confirmRes = await showConfirm(
       "Ubah Status Kunjungan",
       `Ubah status "${p.title}" menjadi "${statusLabel}"?`
@@ -347,6 +362,7 @@ export default function PpiRoadshow27Page() {
           schoolName: p.schoolName,
           location: p.location,
           date: p.date,
+          time: p.time,
           imageUrl: nextStatus === "AKAN_DIKUNJUNGI" ? "" : p.imageUrl,
           summary: p.summary,
           content: p.content,
@@ -974,7 +990,7 @@ export default function PpiRoadshow27Page() {
             {/* Panduan Cepat Balon / Overlay Android */}
             <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-left space-y-1">
               <span className="font-bold flex items-center gap-1.5 text-amber-200">
-                <span>💡 Catatan HP Android:</span>
+                <span>Catatan Pengguna Android:</span>
               </span>
               <p className="text-zinc-300 leading-relaxed">
                 Jika muncul pesan <em>&ldquo;Tutup balon atau overlay&rdquo;</em>, tutup dulu balon chat WhatsApp/Messenger atau perekam layar yang sedang mengambang di layar HP Anda, lalu klik <strong>Coba lagi</strong>.
@@ -1697,10 +1713,24 @@ export default function PpiRoadshow27Page() {
                     : "bg-zinc-950 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/60"
                   }`}
               >
-                <Check className="w-3.5 h-3.5 inline mr-0.5" />
                 <span>Sudah Dikunjungi</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
                   {posts.filter((p) => p.status === "SUDAH_DIKUNJUNGI").length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPostsFilter("SEDANG_BERLANGSUNG")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${postsFilter === "SEDANG_BERLANGSUNG"
+                    ? "bg-red-600 text-white shadow-md shadow-red-600/40"
+                    : "bg-zinc-950 text-red-400 hover:bg-red-950/40 border border-red-900/60"
+                  }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span>Sedang Berlangsung</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
+                  {posts.filter((p) => p.status === "SEDANG_BERLANGSUNG").length}
                 </span>
               </button>
 
@@ -1712,7 +1742,6 @@ export default function PpiRoadshow27Page() {
                     : "bg-zinc-950 text-sky-400 hover:bg-sky-950/40 border border-sky-900/60"
                   }`}
               >
-                <RefreshCw className="w-3.5 h-3.5 inline mr-0.5" />
                 <span>Akan Dikunjungi</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
                   {posts.filter((p) => p.status === "AKAN_DIKUNJUNGI").length}
@@ -1731,6 +1760,7 @@ export default function PpiRoadshow27Page() {
                   .filter((p) => postsFilter === "ALL" || p.status === postsFilter)
                   .map((post) => {
                     const isSudah = post.status === "SUDAH_DIKUNJUNGI";
+                    const isSedang = post.status === "SEDANG_BERLANGSUNG";
                     return (
                       <div
                         key={post.id}
@@ -1747,15 +1777,17 @@ export default function PpiRoadshow27Page() {
                               className="w-full h-full object-cover"
                             />
                             <span
-                              className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isSudah
+                              className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isSedang
+                                  ? "bg-red-600 text-white animate-pulse"
+                                  : isSudah
                                   ? "bg-emerald-600 text-white"
                                   : "bg-sky-600 text-white"
                                 }`}
                             >
-                              {isSudah ? "Sudah Dikunjungi" : "Akan Dikunjungi"}
+                              {isSedang ? "Sedang Berlangsung" : isSudah ? "Sudah Dikunjungi" : "Akan Dikunjungi"}
                             </span>
                             <span className="absolute bottom-0 left-0 px-3 py-1 bg-black/70 text-zinc-200 text-[10px] font-mono font-bold">
-                              {post.date || "AGUSTUS 2026"}
+                              {post.date || "2026"}{post.time ? ` • ${post.time}` : ""}
                             </span>
                           </div>
 
@@ -2056,8 +2088,9 @@ export default function PpiRoadshow27Page() {
                     onChange={(e) => setPostFormStatus(e.target.value as any)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-bold focus:border-red-500 focus:outline-none"
                   >
+                    <option value="AKAN_DIKUNJUNGI">Akan Dikunjungi</option>
+                    <option value="SEDANG_BERLANGSUNG">Sedang Berlangsung (Kedip Merah)</option>
                     <option value="SUDAH_DIKUNJUNGI">Sudah Dikunjungi</option>
-                    <option value="AKAN_DIKUNJUNGI">Akan Dikunjungi (Jadwal/Agenda)</option>
                   </select>
                 </div>
 
@@ -2103,17 +2136,32 @@ export default function PpiRoadshow27Page() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-zinc-300 font-semibold mb-1">
-                  Tanggal Berita / Kunjungan (Persis Tampilan Diskominfo)
-                </label>
-                <input
-                  type="text"
-                  value={postFormDate}
-                  onChange={(e) => setPostFormDate(e.target.value)}
-                  placeholder="Contoh: 04 AGUSTUS 2026"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:border-red-500 focus:outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Tanggal Kunjungan
+                  </label>
+                  <input
+                    type="text"
+                    value={postFormDate}
+                    onChange={(e) => setPostFormDate(e.target.value)}
+                    placeholder="Contoh: 06 NOVEMBER 2026"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    Jam / Waktu Kunjungan (Mulai - Selesai)
+                  </label>
+                  <input
+                    type="text"
+                    value={postFormTime}
+                    onChange={(e) => setPostFormTime(e.target.value)}
+                    placeholder="Contoh: 08:00 - 12:00 WIB"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:border-red-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               {postFormStatus === "AKAN_DIKUNJUNGI" ? (
@@ -2121,10 +2169,22 @@ export default function PpiRoadshow27Page() {
                   <Shield className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
                     <span className="font-bold block text-sky-200">
-                      Status: Akan Dikunjungi (Agenda Kalender)
+                      Status: Akan Dikunjungi
                     </span>
                     <p className="text-[11px] text-sky-300/90 leading-relaxed">
-                      Sesuai ketentuan, sekolah yang belum dikunjungi tidak memerlukan foto dokumentasi lapangan. Halaman publik akan otomatis menampilkan kartu agenda resmi dengan tanggal kunjungan tanpa foto.
+                      Sekolah yang belum dikunjungi akan otomatis menampilkan kartu agenda dengan tanggal dan jam kunjungan.
+                    </p>
+                  </div>
+                </div>
+              ) : postFormStatus === "SEDANG_BERLANGSUNG" ? (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/40 text-red-300 text-xs flex items-start gap-2.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0 mt-1" />
+                  <div className="space-y-0.5">
+                    <span className="font-bold block text-red-200">
+                      Status: Sedang Berlangsung (Kedip Merah Pelan Aktif)
+                    </span>
+                    <p className="text-[11px] text-zinc-300 leading-relaxed">
+                      Kartu di portal publik akan menampilkan badge berkedip merah pelan menandakan tim PPI sedang berada di lokasi sekolah tersebut.
                     </p>
                   </div>
                 </div>

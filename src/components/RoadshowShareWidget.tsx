@@ -56,7 +56,7 @@ export default function RoadshowShareWidget({ title, url, schoolName }: Roadshow
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-zinc-800/80">
         <div>
           <h4 className="text-sm font-black text-white flex items-center gap-2">
-            <span>📢 Bagikan Berita Ini</span>
+            <span>Bagikan Berita Ini</span>
           </h4>
           <p className="text-[11px] text-zinc-400 mt-0.5">
             Sebarkan informasi resmi kunjungan &amp; hasil seleksi ke grup sekolah &amp; media sosial
@@ -79,7 +79,7 @@ export default function RoadshowShareWidget({ title, url, schoolName }: Roadshow
           rel="noopener noreferrer"
           className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition active:scale-95"
         >
-          <span>💬 WhatsApp</span>
+          <span>WhatsApp</span>
         </a>
 
         {/* Facebook Share Button */}
@@ -89,7 +89,7 @@ export default function RoadshowShareWidget({ title, url, schoolName }: Roadshow
           rel="noopener noreferrer"
           className="px-4 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/30 transition active:scale-95"
         >
-          <span>🌐 Facebook</span>
+          <span>Facebook</span>
         </a>
 
         {/* Copy Link Button */}
@@ -102,7 +102,7 @@ export default function RoadshowShareWidget({ title, url, schoolName }: Roadshow
               : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-zinc-600"
           }`}
         >
-          <span>{copied ? "Tersalin!" : "🔗 Salin Link Berita"}</span>
+          <span>{copied ? "Tersalin!" : "Salin Link Berita"}</span>
         </button>
 
         {/* Native Mobile Share (if available) */}
@@ -111,7 +111,7 @@ export default function RoadshowShareWidget({ title, url, schoolName }: Roadshow
           onClick={handleNativeShare}
           className="px-4 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-bold text-xs border border-zinc-700 transition active:scale-95 sm:hidden"
         >
-          <span>↗️ Lainnya</span>
+          <span>Lainnya</span>
         </button>
       </div>
 

@@ -148,11 +148,12 @@ model RoadshowPost {
   id          String   @id @default(cuid())
   title       String   @db.VarChar(500)
   category    String   @default("Kunjungan Sekolah") @db.VarChar(255) // Kunjungan Sekolah | Sosialisasi | Pra-Seleksi | Evaluasi
-  status      String   @default("SUDAH_DIKUNJUNGI") @db.VarChar(50)  // SUDAH_DIKUNJUNGI | AKAN_DIKUNJUNGI
+  status      String   @default("SUDAH_DIKUNJUNGI") @db.VarChar(50)  // SUDAH_DIKUNJUNGI | SEDANG_BERLANGSUNG | AKAN_DIKUNJUNGI
   schoolId    String?
   schoolName  String   @default("") @db.VarChar(255)
   location    String   @default("Kab. Probolinggo") @db.VarChar(255)
   date        String   @db.VarChar(100) // e.g. "04 AGUSTUS 2026"
+  time        String   @default("08:00 - 12:00 WIB") @db.VarChar(100) // e.g. "08:00 - 11:30 WIB"
   imageUrl    String   @default("") @db.VarChar(1000)
   summary     String   @default("") @db.VarChar(1500)
   content     String   @default("") @db.VarChar(8000)

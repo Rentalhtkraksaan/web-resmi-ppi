@@ -32,11 +32,12 @@ interface RoadshowPost {
   id: string;
   title: string;
   category: string;
-  status: "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI";
+  status: "SUDAH_DIKUNJUNGI" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI";
   schoolId?: string;
   schoolName: string;
   location: string;
   date: string;
+  time?: string;
   imageUrl: string;
   summary: string;
   content: string;
@@ -54,8 +55,8 @@ export default function PublicRoadshowPage() {
   // Main View Tab: "POSTS" (Berita/Informasi) or "CANDIDATES" (Hasil Seleksi Lolos)
   const [activeMainTab, setActiveMainTab] = useState<"POSTS" | "CANDIDATES">("POSTS");
 
-  // Post Filter: "ALL" | "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI"
-  const [postFilter, setPostFilter] = useState<"ALL" | "SUDAH_DIKUNJUNGI" | "AKAN_DIKUNJUNGI">("ALL");
+  // Post Filter: "ALL" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI" | "SUDAH_DIKUNJUNGI"
+  const [postFilter, setPostFilter] = useState<"ALL" | "SEDANG_BERLANGSUNG" | "AKAN_DIKUNJUNGI" | "SUDAH_DIKUNJUNGI">("ALL");
   const [searchPostQuery, setSearchPostQuery] = useState("");
   const [selectedPost, setSelectedPost] = useState<RoadshowPost | null>(null);
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
@@ -136,8 +137,9 @@ export default function PublicRoadshowPage() {
     return matchStatus && matchSearch;
   });
 
-  const countSudah = posts.filter((p) => p.status === "SUDAH_DIKUNJUNGI").length;
+  const countSedang = posts.filter((p) => p.status === "SEDANG_BERLANGSUNG").length;
   const countAkan = posts.filter((p) => p.status === "AKAN_DIKUNJUNGI").length;
+  const countSudah = posts.filter((p) => p.status === "SUDAH_DIKUNJUNGI").length;
 
   // Candidates Logic
   const selectedSchool =
@@ -180,12 +182,12 @@ export default function PublicRoadshowPage() {
   const handleShareWhatsApp = (c: PassedCandidate) => {
     const schoolName = c.namaSekolah || selectedSchool?.namaSekolah || "SMA/SMK Mitra Roadshow";
     const text =
-      `🎉 *ALHAMDULILLAH LOLOS SELEKSI ROADSHOW PPI KABUPATEN PROBOLINGGO* 🇮🇩\n\n` +
+      `*ALHAMDULILLAH LOLOS SELEKSI ROADSHOW PPI KABUPATEN PROBOLINGGO*\n\n` +
       `Saya atas nama: *${c.nama.toUpperCase()}*\n` +
       `Asal Sekolah: *${schoolName}*\n` +
       `Kode Peserta: *${c.kodePeserta}*\n\n` +
       `Dinyatakan *LOLOS SELEKSI TAHAP AWAL ROADSHOW PPI* dan berhak melangkah ke seleksi Calon Paskibraka Kabupaten Probolinggo!\n\n` +
-      `🔍 Cek hasil verifikasi resmi di:\n` +
+      `Cek hasil verifikasi resmi di:\n` +
       `https://ppikabupatenprobolinggo.id/roadshow\n\n` +
       `#PaskibrakaKabupatenProbolinggo #RoadshowPPI #GenerasiEmas`;
 
@@ -315,7 +317,7 @@ export default function PublicRoadshowPage() {
                 : "bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800"
             }`}
           >
-            <span>📰 Kabar &amp; Berita Kunjungan</span>
+            <span>Kabar &amp; Berita Kunjungan</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/30 font-mono">
               {posts.length}
             </span>
@@ -330,7 +332,7 @@ export default function PublicRoadshowPage() {
                 : "bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800"
             }`}
           >
-            <span>🏆 Daftar Siswa Lolos Seleksi</span>
+            <span>Daftar Siswa Lolos Seleksi</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/30 font-mono">
               {totalPassedAllSchools}
             </span>
@@ -343,7 +345,7 @@ export default function PublicRoadshowPage() {
       {/* ===================================================================== */}
       {activeMainTab === "POSTS" && (
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8 space-y-6">
-          {/* Sub-Filter: Semua / Sudah Dikunjungi / Akan Dikunjungi + Search */}
+          {/* Sub-Filter: Semua / Sedang Berlangsung / Akan Dikunjungi / Sudah Dikunjungi + Search */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900/80 p-4 rounded-2xl border border-zinc-800">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -355,21 +357,22 @@ export default function PublicRoadshowPage() {
                     : "bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800"
                 }`}
               >
-                🌟 Semua ({posts.length})
+                Semua ({posts.length})
               </button>
 
               <button
                 type="button"
-                onClick={() => setPostFilter("SUDAH_DIKUNJUNGI")}
+                onClick={() => setPostFilter("SEDANG_BERLANGSUNG")}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                  postFilter === "SUDAH_DIKUNJUNGI"
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
-                    : "bg-zinc-950 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/30"
+                  postFilter === "SEDANG_BERLANGSUNG"
+                    ? "bg-red-600 text-white shadow-md shadow-red-600/40"
+                    : "bg-zinc-950 text-red-400 border border-red-900/60 hover:bg-red-950/30"
                 }`}
               >
-                <span>✅ Sudah Dikunjungi</span>
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span>Sedang Berlangsung</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
-                  {countSudah}
+                  {countSedang}
                 </span>
               </button>
 
@@ -382,9 +385,26 @@ export default function PublicRoadshowPage() {
                     : "bg-zinc-950 text-sky-400 border border-sky-900/60 hover:bg-sky-950/30"
                 }`}
               >
-                <span>⏳ Akan Dikunjungi</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                <span>Akan Dikunjungi</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
                   {countAkan}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPostFilter("SUDAH_DIKUNJUNGI")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  postFilter === "SUDAH_DIKUNJUNGI"
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                    : "bg-zinc-950 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/30"
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>Sudah Dikunjungi</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/30 font-mono">
+                  {countSudah}
                 </span>
               </button>
             </div>
@@ -425,6 +445,9 @@ export default function PublicRoadshowPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPosts.map((post) => {
                 const isSudah = post.status === "SUDAH_DIKUNJUNGI";
+                const isSedang = post.status === "SEDANG_BERLANGSUNG";
+                const displayTime = post.time || "08:00 - 12:00 WIB";
+
                 return (
                   <article
                     key={post.id}
@@ -444,7 +467,6 @@ export default function PublicRoadshowPage() {
                             />
                           ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-800 p-4 text-center">
-                              <span className="text-3xl mb-1">📸</span>
                               <span className="text-xs font-semibold">Foto Dokumentasi Kunjungan</span>
                             </div>
                           )}
@@ -452,27 +474,48 @@ export default function PublicRoadshowPage() {
                           {/* Status Badge: Pojok Kanan Atas */}
                           <div className="absolute top-3 right-3">
                             <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md bg-emerald-600 text-white">
-                              ✓ Sudah Dikunjungi
+                              Sudah Dikunjungi
                             </span>
                           </div>
 
-                          {/* Date Badge: Menempel di Bagian Bawah Gambar (Persis Layout Diskominfo) */}
+                          {/* Date & Time Badge: Menempel di Bagian Bawah Gambar */}
                           <div className="absolute bottom-0 left-0">
                             <span className="inline-block px-3.5 py-1.5 bg-[#4c7c38] text-white text-[11px] font-bold uppercase tracking-wider shadow-sm">
-                              {post.date || "AGUSTUS 2026"}
+                              {post.date || "AGUSTUS 2026"} • {displayTime}
                             </span>
                           </div>
                         </div>
+                      ) : isSedang ? (
+                        /* Card Header untuk Sekolah yang SEDANG BERLANGSUNG (KEDIP MERAH PELAN) */
+                        <div className="bg-gradient-to-br from-[#2a0808] via-[#3d0f0f] to-[#1f0505] border-b border-red-800/50 p-5 text-white relative overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600 text-white shadow-lg shadow-red-600/50 animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                              Sedang Berlangsung
+                            </span>
+                            <span className="text-[11px] font-bold text-red-200 font-mono">
+                              {post.date} • {displayTime}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-red-300 uppercase tracking-wider block">
+                              Target Kunjungan Tim PPI
+                            </span>
+                            <h4 className="text-sm font-black text-white truncate">
+                              {post.schoolName || "Sekolah Mitra"}
+                            </h4>
+                          </div>
+                        </div>
                       ) : (
-                        /* Card Header untuk Sekolah yang BELUM/AKAN DIKUNJUNGI (TANPA FOTO!) */
+                        /* Card Header untuk Sekolah yang AKAN DIKUNJUNGI */
                         <div className="bg-gradient-to-br from-[#0c1a30] via-[#112240] to-[#0a1426] border-b border-sky-800/40 p-5 text-white relative overflow-hidden">
                           <div className="flex items-center justify-between gap-2 mb-2.5">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/20 border border-sky-400/40 text-sky-300">
-                              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
-                              ⏳ Akan Dikunjungi
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                              Akan Dikunjungi
                             </span>
                             <span className="text-[11px] font-bold text-sky-300 font-mono">
-                              📅 {post.date || "Jadwal Menyusul"}
+                              {post.date || "Jadwal Menyusul"} • {displayTime}
                             </span>
                           </div>
                           <div className="space-y-1">
@@ -480,7 +523,7 @@ export default function PublicRoadshowPage() {
                               Target Kunjungan Tim PPI
                             </span>
                             <h4 className="text-sm font-black text-white truncate">
-                              🏫 {post.schoolName || "Sekolah Mitra"}
+                              {post.schoolName || "Sekolah Mitra"}
                             </h4>
                           </div>
                         </div>
@@ -489,10 +532,16 @@ export default function PublicRoadshowPage() {
                       {/* Card Content */}
                       <div className="p-5 space-y-2.5">
                         <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
-                          <span className={isSudah ? "text-[#4c7c38] uppercase tracking-wide font-bold" : "text-sky-600 uppercase tracking-wide font-bold"}>
-                            {post.category || (isSudah ? "Kunjungan Selesai" : "Agenda Kunjungan")}
+                          <span className={
+                            isSedang
+                              ? "text-red-600 uppercase tracking-wide font-bold"
+                              : isSudah
+                              ? "text-[#4c7c38] uppercase tracking-wide font-bold"
+                              : "text-sky-600 uppercase tracking-wide font-bold"
+                          }>
+                            {post.category || (isSedang ? "Sedang Berlangsung" : isSudah ? "Kunjungan Selesai" : "Agenda Kunjungan")}
                           </span>
-                          <span className="truncate max-w-[130px] font-medium">📍 {post.location}</span>
+                          <span className="truncate max-w-[140px] font-medium">{post.location}</span>
                         </div>
 
                         <h3 className="font-extrabold text-slate-900 text-base leading-snug group-hover:text-red-600 transition line-clamp-2">
@@ -521,7 +570,7 @@ export default function PublicRoadshowPage() {
                       </button>
 
                       <span className="text-red-600 font-bold group-hover:underline flex items-center gap-1">
-                        {isSudah ? "Baca Selengkapnya" : "Lihat Info Agenda"}
+                        {isSudah ? "Baca Selengkapnya" : isSedang ? "Pantau Kegiatan" : "Lihat Info Agenda"}
                       </span>
                     </div>
                   </article>
@@ -757,7 +806,6 @@ export default function PublicRoadshowPage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 text-xs font-bold transition active:scale-95 shadow-sm"
                         title="Bagikan ke WhatsApp Story / Status"
                       >
-                        <span>📲</span>
                         <span>Bagikan ke Story WA</span>
                       </button>
                       <span className="px-4 py-1.5 rounded-lg bg-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider shadow-md">
@@ -803,11 +851,38 @@ export default function PublicRoadshowPage() {
                   ✕
                 </button>
 
-                <div className="absolute bottom-0 left-0">
-                  <span className="inline-block px-4 py-1.5 bg-[#4c7c38] text-white text-xs font-bold uppercase tracking-wider">
-                    {selectedPost.date || "AGUSTUS 2026"}
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between text-xs text-white">
+                  <span className="px-3 py-1 bg-emerald-600 text-white font-bold uppercase tracking-wider rounded-md text-[11px]">
+                    Sudah Dikunjungi
+                  </span>
+                  <span className="font-semibold text-zinc-200">
+                    {selectedPost.date || "Agustus 2026"} • {selectedPost.time || "08:00 - 12:00 WIB"}
                   </span>
                 </div>
+              </div>
+            ) : selectedPost.status === "SEDANG_BERLANGSUNG" ? (
+              /* Header Modal untuk SEDANG_BERLANGSUNG (Kedip Merah Pelan) */
+              <div className="bg-gradient-to-r from-[#200508] via-[#33090e] to-[#1a0407] p-6 text-white border-b border-red-800/50 relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPost(null)}
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-lg transition"
+                >
+                  ✕
+                </button>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/25 border border-red-500/50 text-red-200 mb-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 duration-1000" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                  </span>
+                  <span className="tracking-widest">Sedang Berlangsung Hari Ini</span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-black text-white">
+                  {selectedPost.title}
+                </h3>
+                <p className="text-xs text-red-200 mt-1">
+                  Tanggal: <strong>{selectedPost.date || "Hari Ini"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
+                </p>
               </div>
             ) : (
               /* Header Modal Tanpa Foto untuk AKAN_DIKUNJUNGI */
@@ -820,14 +895,14 @@ export default function PublicRoadshowPage() {
                   ✕
                 </button>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/20 border border-sky-400/40 text-sky-300 mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                   <span>Agenda Rencana Kunjungan</span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-black text-white">
                   {selectedPost.title}
                 </h3>
                 <p className="text-xs text-sky-200 mt-1">
-                  📅 Tanggal Rencana: <strong>{selectedPost.date || "Segera"}</strong> • 📍 Lokasi: <strong>{selectedPost.location}</strong>
+                  Tanggal Rencana: <strong>{selectedPost.date || "Segera"}</strong> • Jam: <strong>{selectedPost.time || "08:00 - 12:00 WIB"}</strong> • Lokasi: <strong>{selectedPost.location}</strong>
                 </p>
               </div>
             )}
@@ -836,15 +911,29 @@ export default function PublicRoadshowPage() {
             <div className="p-6 sm:p-8 overflow-y-auto space-y-4">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span
-                  className={`px-3 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] ${
-                    selectedPost.status === "SUDAH_DIKUNJUNGI"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-sky-100 text-sky-800"
+                  className={`px-3 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5 ${
+                    selectedPost.status === "SEDANG_BERLANGSUNG"
+                      ? "bg-red-100 text-red-800 border border-red-300"
+                      : selectedPost.status === "SUDAH_DIKUNJUNGI"
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : "bg-sky-100 text-sky-800 border border-sky-300"
                   }`}
                 >
-                  {selectedPost.status === "SUDAH_DIKUNJUNGI"
-                    ? "✓ Sudah Dikunjungi"
-                    : "⏳ Akan Dikunjungi"}
+                  {selectedPost.status === "SEDANG_BERLANGSUNG" ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+                      <span>Sedang Berlangsung</span>
+                    </>
+                  ) : selectedPost.status === "SUDAH_DIKUNJUNGI" ? (
+                    <span>Sudah Dikunjungi</span>
+                  ) : (
+                    <span>Akan Dikunjungi</span>
+                  )}
+                </span>
+
+                <span className="text-slate-400">•</span>
+                <span className="font-semibold text-slate-700">
+                  {selectedPost.time || "08:00 - 12:00 WIB"}
                 </span>
 
                 <span className="text-slate-400">•</span>
@@ -854,7 +943,7 @@ export default function PublicRoadshowPage() {
 
                 <span className="text-slate-400">•</span>
                 <span className="text-slate-500 font-medium">
-                  📍 {selectedPost.location}
+                  {selectedPost.location}
                 </span>
               </div>
 
@@ -921,7 +1010,7 @@ export default function PublicRoadshowPage() {
                     }}
                     className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md shadow-red-600/30 transition flex items-center gap-2 shrink-0"
                   >
-                    <span>🏆 Lihat Siswa Lolos Sekolah Ini</span>
+                    <span>Lihat Siswa Lolos Sekolah Ini</span>
                   </button>
                 </div>
               )}

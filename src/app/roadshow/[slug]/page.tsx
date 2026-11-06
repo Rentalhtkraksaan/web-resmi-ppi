@@ -86,6 +86,7 @@ async function getPostAndSchoolBySlug(rawSlug: string) {
         schoolName: matchedSchool.namaSekolah,
         location: matchedSchool.lokasi,
         date: matchedSchool.tanggal || "Agustus 2026",
+        time: "08:00 - 12:00 WIB",
         imageUrl: matchedSchool.documentationPhoto || "",
         summary: `Liputan resmi kegiatan Roadshow Paskibraka Kabupaten Probolinggo di ${matchedSchool.namaSekolah}.`,
         content: `Tim Purna Paskibraka Indonesia (PPI) Kabupaten Probolinggo menyelenggarakan kegiatan Roadshow Sosialisasi dan Pra-Seleksi Calon Paskibraka di ${matchedSchool.namaSekolah}, berlokasi di ${matchedSchool.lokasi}. Kegiatan ini bertujuan untuk menjaring calon pandu pertiwi berkarakter, berdedikasi tinggi, dan memenuhi standar fisik serta wawasan kebangsaan.`,
@@ -166,6 +167,7 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
   }
 
   const isSudah = post.status === "SUDAH_DIKUNJUNGI";
+  const isSedang = post.status === "SEDANG_BERLANGSUNG";
   const shareSlug = toRoadshowSlug(post.schoolName, post.location) || params.slug;
   const canonicalUrl = `https://www.ppikabupatenprobolinggo.id/roadshow/${shareSlug}`;
 
@@ -227,21 +229,35 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <span
-              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                isSudah
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                isSedang
+                  ? "bg-red-600 text-white shadow-md shadow-red-900/40 ring-2 ring-red-400/50"
+                  : isSudah
                   ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40"
                   : "bg-sky-600 text-white shadow-md shadow-sky-900/40"
               }`}
             >
-              {isSudah ? "Sudah Dikunjungi" : "Akan Dikunjungi"}
+              {isSedang ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75 duration-1000" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+                  </span>
+                  <span>Sedang Berlangsung</span>
+                </>
+              ) : isSudah ? (
+                "Sudah Dikunjungi"
+              ) : (
+                "Akan Dikunjungi"
+              )}
             </span>
 
             <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 text-emerald-100 border border-white/15">
               {post.category}
             </span>
 
-            <span className="text-xs text-emerald-200/80 font-mono">
-              📅 {post.date || "Agustus 2026"}
+            <span className="text-xs text-emerald-200/90 font-mono">
+              {post.date || "Agustus 2026"} • {post.time || "08:00 - 12:00 WIB"}
             </span>
           </div>
         </div>
@@ -255,9 +271,9 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
           {/* Article Header */}
           <div className="space-y-3 pb-6 border-b border-slate-100">
             <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold uppercase tracking-wider">
-              <span className="text-[#4c7c38] font-bold">🏫 {post.schoolName || "Sekolah Mitra"}</span>
+              <span className="text-[#4c7c38] font-bold">{post.schoolName || "Sekolah Mitra"}</span>
               <span>•</span>
-              <span>📍 {post.location}</span>
+              <span>{post.location}</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-950 leading-tight">
@@ -265,13 +281,15 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
             </h1>
 
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 font-medium pt-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
                   PPI
                 </span>
                 <span>Oleh: <strong>{post.author || "Penjab Roadshow"}</strong></span>
                 <span>•</span>
-                <span>Diterbitkan: <strong>{post.date || "2026"}</strong></span>
+                <span>Tanggal: <strong>{post.date || "2026"}</strong></span>
+                <span>•</span>
+                <span>Waktu Kunjungan: <strong className="text-slate-800">{post.time || "08:00 - 12:00 WIB"}</strong></span>
               </div>
             </div>
           </div>
@@ -321,7 +339,7 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
-                    <span>🏆 Daftar Siswa Lolos Seleksi Roadshow</span>
+                    <span>Daftar Siswa Lolos Seleksi Roadshow</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Peserta dari {post.schoolName} yang dinyatakan memenuhi kualifikasi fisik awal
@@ -376,7 +394,7 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
           <section className="space-y-4 pt-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-white">
-                📰 Kabar Roadshow Sekolah Lainnya
+                Kabar Roadshow Sekolah Lainnya
               </h3>
               <Link
                 href="/roadshow"
@@ -409,7 +427,7 @@ export default async function RoadshowDetailPage({ params }: PageProps) {
                     </div>
 
                     <div className="pt-2 border-t border-zinc-800 text-xs font-bold text-zinc-500 group-hover:text-white transition flex items-center justify-between">
-                      <span className="truncate max-w-[150px]">🏫 {rp.schoolName}</span>
+                      <span className="truncate max-w-[150px]">{rp.schoolName}</span>
                       <span>Baca</span>
                     </div>
                   </Link>
